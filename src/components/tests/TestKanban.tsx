@@ -1,10 +1,16 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import type { Test } from "@/types/test";
 import { TestCard } from "./TestCard";
 import { cn } from "@/lib/utils";
 import { startOfDay, isBefore } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
+
+const MAX_PER_COLUMN_INITIAL = 20;
+const VOIR_PLUS_STEP = 20;
 
 interface TestKanbanProps {
     tests: Test[];
@@ -23,6 +29,15 @@ const LIFECYCLE_STAGES = [
 ] as const;
 
 type LifecycleKey = (typeof LIFECYCLE_STAGES)[number]["key"];
+
+const INITIAL_LIMITS: Record<LifecycleKey, number> = {
+    idea: MAX_PER_COLUMN_INITIAL,
+    creating: MAX_PER_COLUMN_INITIAL,
+    paused: MAX_PER_COLUMN_INITIAL,
+    staging: MAX_PER_COLUMN_INITIAL,
+    live: MAX_PER_COLUMN_INITIAL,
+    done: MAX_PER_COLUMN_INITIAL,
+};
 
 function isEnded(test: Test): boolean {
     if (!test.end_date) return false;
@@ -71,6 +86,13 @@ function getLifecycleStage(test: Test): LifecycleKey {
 }
 
 export function TestKanban({ tests, onTestClick }: TestKanbanProps) {
+    const [visibleLimit, setVisibleLimit] = useState<Record<LifecycleKey, number>>(INITIAL_LIMITS);
+
+    // Réinitialiser les limites quand la liste filtrée change (filtres, recherche, etc.)
+    useEffect(() => {
+        setVisibleLimit(INITIAL_LIMITS);
+    }, [tests.length]);
+
     // Group tests by lifecycle stage
     const columns: Record<LifecycleKey, Test[]> = {
         idea: [], creating: [], paused: [], staging: [], live: [], done: [],
@@ -89,6 +111,10 @@ export function TestKanban({ tests, onTestClick }: TestKanbanProps) {
             <div className="flex h-full gap-4 overflow-x-auto pb-4 px-2 custom-scrollbar">
                 {LIFECYCLE_STAGES.map(({ key, label, color, dot }) => {
                     const colTests = columns[key];
+                    const limit = visibleLimit[key];
+                    const visibleColTests = colTests.slice(0, limit);
+                    const hasMore = colTests.length > limit;
+                    const remaining = colTests.length - limit;
 
                     return (
                         <div key={key} className="flex flex-col min-w-[300px] w-[300px] gap-4">
@@ -115,7 +141,7 @@ export function TestKanban({ tests, onTestClick }: TestKanbanProps) {
                                         )}
                                     >
                                         <div className="flex flex-col gap-3">
-                                            {colTests.map((test, index) => (
+                                            {visibleColTests.map((test, index) => (
                                                 <Draggable key={test.id} draggableId={test.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
@@ -137,6 +163,17 @@ export function TestKanban({ tests, onTestClick }: TestKanbanProps) {
                                                 </Draggable>
                                             ))}
                                             {provided.placeholder}
+                                            {hasMore && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="w-full mt-1 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setVisibleLimit((prev) => ({ ...prev, [key]: prev[key] + VOIR_PLUS_STEP }))}
+                                                >
+                                                    <ChevronDown className="h-4 w-4 mr-1" />
+                                                    Voir plus {remaining > VOIR_PLUS_STEP ? `(+${VOIR_PLUS_STEP})` : `(${remaining})`}
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 )}

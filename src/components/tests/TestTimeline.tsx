@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { format, differenceInDays, addDays, startOfDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { getAbtStatusColor, getAbtStatusLabel, isTestPeriodLocked } from "@/lib/status-mapping";
 import { useUpdateTestDates } from "@/hooks/useTests";
 import type { Test } from "@/types/test";
-import { ChevronLeft, ChevronRight, Calendar, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Lock, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const TIMELINE_INITIAL = 20;
+const TIMELINE_VOIR_PLUS_STEP = 10;
 
 interface TestTimelineProps {
     tests: Test[];
@@ -66,7 +69,13 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
     const [halfWindow, setHalfWindow] = useState<WindowPreset>(30);
     const [offset, setOffset] = useState(0); // days to shift the window
     const [statusFilter, setStatusFilter] = useState<string | null>(null);
+    const [visibleCount, setVisibleCount] = useState(TIMELINE_INITIAL);
     const updateDates = useUpdateTestDates();
+
+    // Réinitialiser la limite affichée quand les filtres ou la liste changent
+    useEffect(() => {
+        setVisibleCount(TIMELINE_INITIAL);
+    }, [statusFilter, tests.length]);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // ── Filter by status (legend click) ─────────────────────────────────────
@@ -99,6 +108,10 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
             .filter(Boolean) as { test: Test; left: number; width: number; start: Date; end: Date }[];
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filteredTests, minDate.getTime(), maxDate.getTime(), totalDays]);
+
+    const visibleBars = useMemo(() => bars.slice(0, visibleCount), [bars, visibleCount]);
+    const hasMoreBars = bars.length > visibleCount;
+    const remainingBars = bars.length - visibleCount;
 
     // ── Month labels ────────────────────────────────────────────────────────
     const monthLabels = useMemo(() => {
@@ -352,7 +365,15 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
 
             {/* Bar zone */}
             <div className="flex-1 overflow-auto px-4 pt-6 pb-4 min-h-[200px]" ref={containerRef}>
-                <div className="relative" style={{ minHeight: `${Math.max(bars.length * 44, 120)}px` }}>
+                <div
+                    className="relative"
+                    style={{
+                        minHeight: `${Math.max(
+                            visibleBars.length * 44 + (hasMoreBars ? 52 : 0),
+                            120
+                        )}px`,
+                    }}
+                >
                     {/* Today marker */}
                     {todayLeft >= 0 && todayLeft <= 100 && (
                         <div
@@ -367,14 +388,17 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                         </div>
                     )}
 
-                    {bars.length === 0 ? (
+                    {visibleBars.length === 0 && !hasMoreBars ? (
                         <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
                             {statusFilter
                                 ? `Aucun test "${STATUS_LEGEND.find((s) => s.status === statusFilter)?.label ?? statusFilter}" avec des dates dans cette période.`
                                 : "Aucun test avec des dates dans cette période."}
                         </div>
                     ) : (
-                        bars.map(({ test, left, width, start, end }, index) => {
+                        <>
+                        {/* Spacer pour que le bouton "Voir plus" soit en bas : les barres sont en absolute donc ne prennent pas de place en flux */}
+                        <div aria-hidden="true" style={{ height: visibleBars.length * 44 }} />
+                        {visibleBars.map(({ test, left, width, start, end }, index) => {
                             const colorClasses = getAbtStatusColor(test.abt_status);
                             const locked = isTestPeriodLocked(test.abt_status);
                             const lockedTitle = locked
@@ -462,7 +486,21 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                                     </div>
                                 </div>
                             );
-                        })
+                        })}
+                        {hasMoreBars && (
+                            <div className="flex items-center justify-center pt-3 pb-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-muted-foreground"
+                                    onClick={() => setVisibleCount((prev) => prev + TIMELINE_VOIR_PLUS_STEP)}
+                                >
+                                    <ChevronDown className="h-4 w-4 mr-1" />
+                                    Voir plus (+{Math.min(TIMELINE_VOIR_PLUS_STEP, remainingBars)})
+                                </Button>
+                            </div>
+                        )}
+                        </>
                     )}
                 </div>
             </div>
