@@ -1,4 +1,8 @@
-import type { AbtTokenResponse, AbtCampaign, AbtCampaignsResponse } from "@/types/abtasty";
+import type {
+    AbtTokenResponse,
+    AbtCampaign,
+    AbtCampaignsResponse,
+} from "@/types/abtasty";
 
 const BASE_URL = process.env.ABT_API_BASE_URL ?? "https://api.abtasty.com";
 const CLIENT_ID = process.env.ABT_CLIENT_ID ?? "";
@@ -20,16 +24,19 @@ export async function getToken(): Promise<string> {
         return cachedToken.access_token;
     }
 
-    const params = new URLSearchParams({
+    const body = {
         grant_type: "client_credentials",
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
-    });
+    };
 
     const res = await fetch(`${BASE_URL}/oauth/v2/token`, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params.toString(),
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+        },
+        body: JSON.stringify(body),
         cache: "no-store",
     });
 
@@ -48,7 +55,9 @@ export async function getToken(): Promise<string> {
 }
 
 /**
- * Makes an authenticated GET request to the AB Tasty API.
+ * Makes an authenticated GET request to the AB Tasty Public API.
+ * `path` doit être un chemin complet à partir de la racine, ex:
+ * `/api/core/accounts/{account_id}/tests`.
  */
 async function abtFetch<T>(path: string): Promise<T> {
     const token = await getToken();
@@ -91,15 +100,65 @@ async function abtPatch<T>(path: string, body: object): Promise<T> {
     return res.json();
 }
 
+function mapAbtTest(t: any): AbtCampaign {
+    const masterName: string | undefined = t.master?.name;
+    const localeLabel: string | undefined = t.name;
+
+    return {
+        id: t.id,
+        name: masterName
+            ? `${masterName}${localeLabel ? ` (${localeLabel})` : ""}`
+            : localeLabel ?? "",
+        status: (t.status ?? t.state ?? "") as any,
+        type: t.type ?? t.test_type ?? "",
+        url: t.url ?? t.master?.url ?? null,
+        labels: Array.isArray(t.labels) ? t.labels : [],
+        visitors: t.traffic?.visitors ?? 0,
+        start_date:
+            t.start_datetime ??
+            t.live_at?.readable_date ??
+            t.created_at?.readable_date ??
+            null,
+        end_date:
+            t.stop_datetime ??
+            t.last_pause?.readable_date ??
+            null,
+        created_at: t.created_at?.readable_date ?? null,
+        assigned_users: [],
+        goals: [],
+        variations:
+            t.variations?.map((v: any) => ({
+                id: v.id,
+                name: v.name,
+                traffic: v.traffic,
+            })) ?? [],
+    };
+}
+
 /**
- * Fetches all campaigns for the configured account.
+ * Fetches all tests/campaigns for the configured account.
+ * Aligne l’endpoint sur celui utilisé par l’UI AB Tasty :
+ * Appel sans has_redirection pour récupérer tous les tests. Pagination sur _pagination._pages.
  */
 export async function getCampaigns(): Promise<AbtCampaign[]> {
     try {
-        const data = await abtFetch<AbtCampaignsResponse>(
-            `/v1/accounts/${ACCOUNT_ID}/campaigns`
+        const first = await abtFetch<any>(
+            `/api/v1/accounts/${ACCOUNT_ID}/tests?_page=1&_max_per_page=50`
         );
-        return data.data ?? [];
+
+        const pages: number = first._pagination?._pages ?? 1;
+        let items: any[] = first._data ?? [];
+
+        for (let page = 2; page <= pages; page++) {
+            const next = await abtFetch<any>(
+                `/api/v1/accounts/${ACCOUNT_ID}/tests?_page=${page}&_max_per_page=50`
+            );
+            if (Array.isArray(next._data)) {
+                items = items.concat(next._data);
+            }
+        }
+
+        return items.map(mapAbtTest);
     } catch (error) {
         console.error("[abtasty] getCampaigns error:", error);
         throw error;
@@ -107,23 +166,27 @@ export async function getCampaigns(): Promise<AbtCampaign[]> {
 }
 
 /**
- * Fetches a single campaign by ID.
+ * Fetches a single test/campaign by ID.
  */
 export async function getCampaign(id: number | string): Promise<AbtCampaign> {
-    return abtFetch<AbtCampaign>(
-        `/v1/accounts/${ACCOUNT_ID}/campaigns/${id}`
+    // Public API: GET /api/v1/accounts/[account_id]/tests/[test_id]
+    const t = await abtFetch<any>(
+        `/api/v1/accounts/${ACCOUNT_ID}/tests/${id}`
     );
+
+    return mapAbtTest(t);
 }
 
 /**
- * Updates the status of a campaign in AB Tasty.
+ * Updates the status of a test/campaign in AB Tasty.
  */
 export async function updateCampaignStatus(
     id: number | string,
     status: string
 ): Promise<AbtCampaign> {
+    // Public API: PATCH /api/v1/accounts/[account_id]/tests/[test_id]
     return abtPatch<AbtCampaign>(
-        `/v1/accounts/${ACCOUNT_ID}/campaigns/${id}`,
+        `/api/v1/accounts/${ACCOUNT_ID}/tests/${id}`,
         { status }
     );
 }

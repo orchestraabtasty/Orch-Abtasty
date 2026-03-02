@@ -8,11 +8,12 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { StatusBadge } from "./StatusBadge";
+import { TypeBadge } from "./TypeBadge";
+import { getAbtStatusLabel, getTypeBorderLeftClass } from "@/lib/status-mapping";
 import type { Test } from "@/types/test";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface TestListProps {
     tests: Test[];
@@ -31,8 +32,8 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                 <TableHeader>
                     <TableRow>
                         <TableHead className="w-[300px]">Nom du test</TableHead>
-                        <TableHead>Statut</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Statut ABT</TableHead>
                         <TableHead>Démarrage</TableHead>
                         <TableHead>Assigné à</TableHead>
                         <TableHead className="text-right">ID ABT</TableHead>
@@ -49,7 +50,7 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                         tests.map((test) => (
                             <TableRow
                                 key={test.id}
-                                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                                className={cn("cursor-pointer hover:bg-muted/50 transition-colors", getTypeBorderLeftClass(test.type))}
                                 onClick={() => onTestClick?.(test)}
                             >
                                 <TableCell className="font-medium">
@@ -63,14 +64,12 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <StatusBadge status={test.internal_status} />
+                                    <TypeBadge type={test.type} />
                                 </TableCell>
-                                <TableCell>
-                                    <Badge variant="outline" className="text-[10px] uppercase font-normal">
-                                        {test.type || "N/A"}
-                                    </Badge>
+                                <TableCell className="text-sm text-muted-foreground">
+                                    {getAbtStatusLabel(test.abt_status)}
                                 </TableCell>
-                                <TableCell className="text-sm border-muted-foreground/20">
+                                <TableCell className="text-sm">
                                     {formatDate(test.target_start_date || test.start_date)}
                                 </TableCell>
                                 <TableCell className="text-sm">

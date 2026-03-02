@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCampaigns } from "@/lib/abtasty";
-import { supabaseAdmin } from "@/lib/supabase";
-import { mergeTestData } from "@/lib/sync";
+import { supabaseAdmin } from "@/lib/supabase-server";
+import { mergeTestData, rowToTest } from "@/lib/sync";
 import type { Test } from "@/types/test";
 
 export async function GET() {
@@ -39,7 +39,12 @@ export async function GET() {
         }
 
         // 3. Merge ABT + Supabase data
-        const tests = mergeTestData(abtCampaigns, supabaseRows ?? []);
+        const merged = mergeTestData(abtCampaigns, supabaseRows ?? []);
+        // 4. Append Orch-only tests (Supabase rows with no ABT campaign)
+        const orchOnly = (supabaseRows ?? [])
+            .filter((r) => r.abt_campaign_id == null && r.id)
+            .map((r) => rowToTest(r as Partial<Test> & { id: string }));
+        const tests: Test[] = [...merged, ...orchOnly];
 
         return NextResponse.json({ data: tests });
     } catch (err) {

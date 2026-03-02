@@ -118,3 +118,48 @@ export function useUpdateTestMeta() {
         },
     });
 }
+
+// ——————————————————————————————————————
+// Optimistic dates update (timeline drag / resize)
+// ——————————————————————————————————————
+export function useUpdateTestDates() {
+    const qc = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            id,
+            start_date,
+            end_date,
+        }: {
+            id: string;
+            start_date: string;
+            end_date: string;
+        }) => {
+            const res = await fetch(`/api/abt/campaigns/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ start_date, end_date }),
+            });
+            if (!res.ok) throw new Error("Failed to update dates");
+            return res.json();
+        },
+
+        onMutate: async ({ id, start_date, end_date }) => {
+            await qc.cancelQueries({ queryKey: TESTS_KEY });
+            const previous = qc.getQueryData<Test[]>(TESTS_KEY);
+            qc.setQueryData<Test[]>(TESTS_KEY, (old) =>
+                old?.map((t) => (t.id === id ? { ...t, start_date, end_date } : t))
+            );
+            return { previous };
+        },
+
+        onError: (_err, _vars, context) => {
+            if (context?.previous) qc.setQueryData(TESTS_KEY, context.previous);
+            toast.error("Échec de la mise à jour des dates.");
+        },
+
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: TESTS_KEY });
+        },
+    });
+}

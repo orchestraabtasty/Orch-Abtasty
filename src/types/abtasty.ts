@@ -9,15 +9,27 @@ export interface AbtCampaign {
     name: string;
     status: AbtCampaignStatus;
     type: string;
+    // Dates
     created_at?: string;
     start_date?: string | null;
     end_date?: string | null;
+    // Champs enrichis (Public API v1)
+    url?: string | null;
+    labels?: string[];
+    visitors?: number;
+    // Relations
     assigned_users?: string[];
     goals?: AbtGoal[];
     variations?: AbtVariation[];
 }
 
 export type AbtCampaignStatus =
+    | "play"
+    | "pause"
+    | "interrupted"
+    | "in_qa"
+    | "scheduled"
+    | "archive"
     | "active"
     | "paused"
     | "stopped"

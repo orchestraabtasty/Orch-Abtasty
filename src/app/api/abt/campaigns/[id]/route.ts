@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCampaign, updateCampaignStatus } from "@/lib/abtasty";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { mapInternalToAbt } from "@/lib/status-mapping";
 import type { InternalStatus } from "@/types/test";
 
@@ -8,9 +8,29 @@ interface Params {
     params: Promise<{ id: string }>;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(_req: Request, { params }: Params) {
     const { id } = await params;
     try {
+        // If id looks like a Supabase UUID, try to load by primary key first (Orch-only or linked test)
+        if (UUID_REGEX.test(id)) {
+            const { data: metaById } = await supabaseAdmin
+                .from("tests")
+                .select("*")
+                .eq("id", id)
+                .single();
+
+            if (metaById) {
+                if (metaById.abt_campaign_id == null) {
+                    return NextResponse.json({ campaign: null, meta: metaById });
+                }
+                const campaign = await getCampaign(String(metaById.abt_campaign_id));
+                return NextResponse.json({ campaign, meta: metaById });
+            }
+        }
+
+        // Otherwise treat id as AB Tasty campaign id
         const campaign = await getCampaign(id);
         const { data: meta } = await supabaseAdmin
             .from("tests")
@@ -32,8 +52,31 @@ export async function PATCH(req: Request, { params }: Params) {
     try {
         const body = await req.json();
         const { internal_status, ...metaFields } = body;
+        const isUuid = UUID_REGEX.test(id);
 
-        // 1. Update Supabase metadata (always)
+        if (isUuid) {
+            // Update by Supabase primary key (Orch-only or linked test)
+            const { error: supabaseError } = await supabaseAdmin
+                .from("tests")
+                .update({
+                    ...(internal_status && { internal_status }),
+                    ...metaFields,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", id);
+
+            if (supabaseError) {
+                console.error("[campaigns/id] Supabase error:", supabaseError);
+                return NextResponse.json(
+                    { error: "Failed to update test", details: supabaseError.message },
+                    { status: 500 }
+                );
+            }
+            // No ABT sync for Orch-only tests (abt_campaign_id is null)
+            return NextResponse.json({ success: true });
+        }
+
+        // Update by abt_campaign_id (upsert for ABT-linked tests)
         const { error: supabaseError } = await supabaseAdmin
             .from("tests")
             .upsert(
@@ -50,7 +93,6 @@ export async function PATCH(req: Request, { params }: Params) {
             console.error("[campaigns/id] Supabase error:", supabaseError);
         }
 
-        // 2. If updating status and it has an ABT equivalent → sync to ABT
         if (internal_status) {
             const abtStatus = mapInternalToAbt(internal_status as InternalStatus);
             if (abtStatus) {

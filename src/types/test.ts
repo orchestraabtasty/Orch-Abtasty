@@ -12,9 +12,13 @@ export interface Test {
     // Data from ABT API
     name: string;
     type: string | null;
+    abt_status: string | null;
     start_date: string | null;
     end_date: string | null;
-    abt_status: string | null;
+    // Champs enrichis ABT
+    url: string | null;
+    labels: string[];
+    visitors: number;
     // Data from Supabase
     target_start_date: string | null;
     hypothesis: string | null;

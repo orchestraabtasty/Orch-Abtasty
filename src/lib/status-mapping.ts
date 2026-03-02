@@ -63,6 +63,110 @@ export function getStatusColor(status: InternalStatus): string {
     return colors[status];
 }
 
+/**
+ * Returns Tailwind classes for a left border by internal status (cards, list rows).
+ */
+export function getStatusBorderLeftClass(status: InternalStatus | undefined): string {
+    const borders: Record<InternalStatus, string> = {
+        idea: "border-l-4 border-l-gray-500",
+        creating: "border-l-4 border-l-blue-500",
+        staging: "border-l-4 border-l-amber-500",
+        live: "border-l-4 border-l-green-500",
+        done: "border-l-4 border-l-purple-500",
+    };
+    return status ? borders[status] ?? "border-l-4 border-l-gray-400" : "border-l-4 border-l-gray-400";
+}
+
+// ─── TYPE-BASED COLORS ────────────────────────────────────────────────────────
+
+const TYPE_COLOR_MAP: Record<string, string> = {
+    ab: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    patch: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+    multipage: "bg-violet-500/15 text-violet-400 border-violet-500/30",
+    split: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+    redirect: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+    server_side: "bg-teal-500/15 text-teal-400 border-teal-500/30",
+    personalization: "bg-pink-500/15 text-pink-400 border-pink-500/30",
+};
+
+const TYPE_BORDER_MAP: Record<string, string> = {
+    ab: "border-l-4 border-l-blue-500",
+    patch: "border-l-4 border-l-orange-500",
+    multipage: "border-l-4 border-l-violet-500",
+    split: "border-l-4 border-l-cyan-500",
+    redirect: "border-l-4 border-l-yellow-500",
+    server_side: "border-l-4 border-l-teal-500",
+    personalization: "border-l-4 border-l-pink-500",
+};
+
+const TYPE_BADGE_MAP: Record<string, string> = {
+    ab: "bg-blue-500",
+    patch: "bg-orange-500",
+    multipage: "bg-violet-500",
+    split: "bg-cyan-500",
+    redirect: "bg-yellow-500",
+    server_side: "bg-teal-500",
+    personalization: "bg-pink-500",
+};
+
+/** Returns Tailwind badge color classes for a given test type. */
+export function getTypeColor(type: string | null | undefined): string {
+    if (!type) return "bg-gray-500/15 text-gray-400 border-gray-500/30";
+    return TYPE_COLOR_MAP[type.toLowerCase()] ?? "bg-gray-500/15 text-gray-400 border-gray-500/30";
+}
+
+/** Returns Tailwind left-border classes for a given test type. */
+export function getTypeBorderLeftClass(type: string | null | undefined): string {
+    if (!type) return "border-l-4 border-l-gray-500";
+    return TYPE_BORDER_MAP[type.toLowerCase()] ?? "border-l-4 border-l-gray-500";
+}
+
+/** Returns the Tailwind bg color for a type dot indicator. */
+export function getTypeDotClass(type: string | null | undefined): string {
+    if (!type) return "bg-gray-500";
+    return TYPE_BADGE_MAP[type.toLowerCase()] ?? "bg-gray-500";
+}
+
+// ─── ABT STATUS COLORS ────────────────────────────────────────────────────────
+
+/** Returns Tailwind color classes for an AB Tasty status (for Timeline bars). */
+export function getAbtStatusColor(abtStatus: string | null | undefined): string {
+    if (!abtStatus) return "bg-gray-500/30 text-gray-300 border-gray-500/40";
+    const map: Record<string, string> = {
+        play: "bg-green-500/25 text-green-300 border-green-500/40",
+        active: "bg-green-500/25 text-green-300 border-green-500/40",
+        pause: "bg-amber-500/25 text-amber-300 border-amber-500/40",
+        paused: "bg-amber-500/25 text-amber-300 border-amber-500/40",
+        stopped: "bg-gray-500/25 text-gray-300 border-gray-500/40",
+        interrupted: "bg-red-500/25 text-red-300 border-red-500/40",
+        in_qa: "bg-blue-500/25 text-blue-300 border-blue-500/40",
+        scheduled: "bg-cyan-500/25 text-cyan-300 border-cyan-500/40",
+        archive: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+        draft: "bg-slate-500/25 text-slate-300 border-slate-500/40",
+    };
+    return map[abtStatus.toLowerCase()] ?? "bg-gray-500/25 text-gray-300 border-gray-500/40";
+}
+
+/**
+ * Returns the display label for AB Tasty status (abt_status).
+ */
+export function getAbtStatusLabel(abtStatus: string | null): string {
+    if (!abtStatus) return "—";
+    const labels: Record<string, string> = {
+        play: "En cours",
+        pause: "Pause",
+        active: "En cours",
+        paused: "Pause",
+        stopped: "Arrêté",
+        interrupted: "Interrompu",
+        in_qa: "En QA",
+        scheduled: "Planifié",
+        archive: "Archivé",
+        draft: "Brouillon",
+    };
+    return labels[abtStatus.toLowerCase()] ?? abtStatus;
+}
+
 export const ALL_STATUSES: InternalStatus[] = [
     "idea",
     "creating",

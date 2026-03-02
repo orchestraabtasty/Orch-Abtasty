@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCampaigns } from "@/lib/abtasty";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { mapAbtToInternal } from "@/lib/status-mapping";
 
 /**
