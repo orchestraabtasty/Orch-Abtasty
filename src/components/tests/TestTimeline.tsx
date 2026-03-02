@@ -402,9 +402,9 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                                         <div
                                             id={`bar-${test.id}`}
                                             className={cn(
-                                                "absolute inset-y-0 rounded-md border select-none group/bar",
+                                                "absolute inset-y-0 rounded-md border select-none group/bar text-foreground",
                                                 colorClasses,
-                                                locked && "opacity-80"
+                                                locked && "opacity-90"
                                             )}
                                             style={{
                                                 left: `${left}%`,

@@ -33,7 +33,7 @@ export function Header() {
                 {/* Left : logo + nav */}
                 <div className="flex items-center gap-6 md:gap-8 shrink-0">
                     <Link href="/dashboard" className="flex items-center space-x-2">
-                        <span className="inline-block font-bold text-xl tracking-tight bg-linear-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+                        <span className="inline-block font-bold text-xl tracking-tight text-[#e32638]">
                             Orch-Abtasty
                         </span>
                     </Link>

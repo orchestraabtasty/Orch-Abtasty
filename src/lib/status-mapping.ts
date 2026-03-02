@@ -129,22 +129,23 @@ export function getTypeDotClass(type: string | null | undefined): string {
 
 // ─── ABT STATUS COLORS ────────────────────────────────────────────────────────
 
-/** Returns Tailwind color classes for an AB Tasty status (for Timeline bars). */
+/** Returns Tailwind classes for Timeline bars: background + border only (no text color).
+ *  Use text-foreground on the bar content so the ID/label stays lisible en light et dark mode. */
 export function getAbtStatusColor(abtStatus: string | null | undefined): string {
-    if (!abtStatus) return "bg-gray-500/30 text-gray-300 border-gray-500/40";
+    if (!abtStatus) return "bg-gray-500/30 border-gray-500/40";
     const map: Record<string, string> = {
-        play: "bg-green-500/25 text-green-300 border-green-500/40",
-        active: "bg-green-500/25 text-green-300 border-green-500/40",
-        pause: "bg-amber-500/25 text-amber-300 border-amber-500/40",
-        paused: "bg-amber-500/25 text-amber-300 border-amber-500/40",
-        stopped: "bg-gray-500/25 text-gray-300 border-gray-500/40",
-        interrupted: "bg-red-500/25 text-red-300 border-red-500/40",
-        in_qa: "bg-blue-500/25 text-blue-300 border-blue-500/40",
-        scheduled: "bg-cyan-500/25 text-cyan-300 border-cyan-500/40",
-        archive: "bg-gray-500/15 text-gray-400 border-gray-500/30",
-        draft: "bg-slate-500/25 text-slate-300 border-slate-500/40",
+        play: "bg-green-500/30 border-green-600/50",
+        active: "bg-green-500/30 border-green-600/50",
+        pause: "bg-amber-500/30 border-amber-600/50",
+        paused: "bg-amber-500/30 border-amber-600/50",
+        stopped: "bg-gray-500/30 border-gray-600/50",
+        interrupted: "bg-red-500/30 border-red-600/50",
+        in_qa: "bg-blue-500/30 border-blue-600/50",
+        scheduled: "bg-cyan-500/30 border-cyan-600/50",
+        archive: "bg-gray-500/20 border-gray-500/40",
+        draft: "bg-slate-500/30 border-slate-600/50",
     };
-    return map[abtStatus.toLowerCase()] ?? "bg-gray-500/25 text-gray-300 border-gray-500/40";
+    return map[abtStatus.toLowerCase()] ?? "bg-gray-500/30 border-gray-600/50";
 }
 
 /**

@@ -30,8 +30,8 @@ export type SortKey =
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
     { value: "default",    label: "Par défaut" },
     { value: "name_asc",   label: "Nom A → Z" },
-    { value: "start_asc",  label: "Début ↑ (plus ancien)" },
-    { value: "start_desc", label: "Début ↓ (plus récent)" },
+    { value: "start_asc",  label: "Création ↑ (plus ancien)" },
+    { value: "start_desc", label: "Création ↓ (plus récent)" },
     { value: "end_asc",    label: "Fin ↑ (se termine bientôt)" },
     { value: "end_desc",   label: "Fin ↓ (se termine le plus tard)" },
     { value: "status",     label: "Statut ABT" },
@@ -122,17 +122,15 @@ export function applyFilters(tests: Test[], filters: FilterState): Test[] {
             result = [...result].sort((a, b) => a.name.localeCompare(b.name, "fr"));
             break;
         case "start_asc":
+            // Plus ancien en premier : tri uniquement sur created_at
             result = [...result].sort(
-                (a, b) =>
-                    parseDateMs(b.start_date ?? b.target_start_date ?? b.created_at) -
-                    parseDateMs(a.start_date ?? a.target_start_date ?? a.created_at)
+                (a, b) => parseDateMs(a.created_at) - parseDateMs(b.created_at)
             );
             break;
         case "start_desc":
+            // Plus récent en premier : tri uniquement sur created_at
             result = [...result].sort(
-                (a, b) =>
-                    parseDateMs(a.start_date ?? a.target_start_date ?? a.created_at) -
-                    parseDateMs(b.start_date ?? b.target_start_date ?? b.created_at)
+                (a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at)
             );
             break;
         case "end_asc":
