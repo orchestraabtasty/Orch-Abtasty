@@ -17,22 +17,28 @@ export async function GET() {
         if (error) {
             console.error("[campaigns] Supabase error:", error);
             // Fallback: return ABT data without metadata
+            const nowIso = new Date().toISOString();
             const tests: Test[] = abtCampaigns.map((c) => ({
                 id: String(c.id),
                 abt_campaign_id: String(c.id),
                 internal_status: "idea" as const,
                 name: c.name,
                 type: c.type ?? null,
+                abt_status: c.status,
                 start_date: c.start_date ?? null,
                 end_date: c.end_date ?? null,
-                abt_status: c.status,
+                // Champs enrichis ABT (fallback minimal)
+                url: c.url ?? null,
+                labels: c.labels ?? [],
+                visitors: c.visitors ?? 0,
+                // Métadonnées Supabase (fallback par défaut)
                 target_start_date: null,
                 hypothesis: null,
                 comment: null,
                 tags: [],
                 assigned_to: [],
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                created_at: c.created_at ?? nowIso,
+                updated_at: nowIso,
                 stats: null,
             }));
             return NextResponse.json({ data: tests });
