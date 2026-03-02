@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TypeBadge } from "./TypeBadge";
 import { getAbtStatusLabel, getTypeBorderLeftClass } from "@/lib/status-mapping";
@@ -66,79 +66,81 @@ export function TestCard({ test, onClick, className }: TestCardProps) {
             )}
             onClick={onClick}
         >
-            <CardHeader className="p-4 space-y-2">
-                <div className="flex justify-between items-start gap-2">
+            <CardContent className="p-3 space-y-2">
+                {/* Ligne 1 : type + ID + durée */}
+                <div className="flex items-center justify-between gap-2">
                     <TypeBadge type={test.type} />
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
                         {durationBadge && (
                             <Badge
                                 variant="outline"
-                                className={cn("text-[9px] h-5 px-1.5 font-medium flex items-center gap-1", durationBadge.className)}
+                                className={cn("text-xs h-4 px-1 font-medium flex items-center gap-0.5", durationBadge.className)}
                             >
-                                <Clock className="h-2.5 w-2.5" />
+                                <Clock className="h-2 w-2" />
                                 {durationBadge.label}
                             </Badge>
                         )}
                         {test.abt_campaign_id && (
-                            <Badge variant="outline" className="text-[10px] uppercase tracking-wider h-5 px-1.5 opacity-60">
+                            <span className="text-[11px] font-mono opacity-50">
                                 #{test.abt_campaign_id}
-                            </Badge>
+                            </span>
                         )}
                     </div>
                 </div>
+
+                {/* Ligne 2 : titre */}
                 <h3 className="font-semibold leading-tight text-sm group-hover:text-primary transition-colors line-clamp-2">
                     {test.name}
                 </h3>
-            </CardHeader>
 
-            <CardContent className="p-4 pt-0 space-y-3">
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                    <span><span className="font-medium text-foreground/80">AB Tasty :</span> {getAbtStatusLabel(test.abt_status)}</span>
+                {/* Ligne 3 : statut ABT + date sur une seule ligne */}
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground/70">
+                        {getAbtStatusLabel(test.abt_status)}
+                    </span>
+                    <span className="flex items-center gap-1 shrink-0">
+                        <Calendar className="h-2.5 w-2.5" />
+                        {formatDate(test.target_start_date || test.start_date)}
+                    </span>
                 </div>
 
-                {test.hypothesis && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 italic">
-                        &quot;{test.hypothesis}&quot;
-                    </p>
+                {/* Ligne 4 : assignés + visiteurs (si présents) */}
+                {(test.assigned_to.length > 0 || test.visitors > 0) && (
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        {test.assigned_to.length > 0 && (
+                            <span className="flex items-center gap-1 truncate">
+                                <User className="h-2.5 w-2.5 shrink-0" />
+                                <span className="truncate">{test.assigned_to.join(", ")}</span>
+                            </span>
+                        )}
+                        {test.visitors > 0 && (
+                            <span className="flex items-center gap-1 shrink-0">
+                                <Users className="h-2.5 w-2.5" />
+                                {test.visitors.toLocaleString("fr-FR")}
+                            </span>
+                        )}
+                    </div>
                 )}
 
-                <div className="flex flex-col gap-1.5 pt-1">
-                    <div className="flex items-center text-[11px] text-muted-foreground">
-                        <Calendar className="mr-1.5 h-3 w-3 shrink-0" />
-                        <span>Démarrage : {formatDate(test.target_start_date || test.start_date)}</span>
+                {/* Ligne 5 : tags + labels (si présents) */}
+                {(test.tags.length > 0 || test.labels.length > 0) && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                        {test.labels.slice(0, 2).map((label) => (
+                            <Badge key={label} variant="secondary" className="text-[10px] h-4 px-1 bg-primary/10 text-primary/70">
+                                {label}
+                            </Badge>
+                        ))}
+                        {test.tags.slice(0, 2).map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-[10px] h-4 px-1">
+                                {tag}
+                            </Badge>
+                        ))}
+                        {test.tags.length + test.labels.length > 4 && (
+                            <span className="text-[10px] text-muted-foreground">+{test.tags.length + test.labels.length - 4}</span>
+                        )}
                     </div>
-                    {test.visitors > 0 && (
-                        <div className="flex items-center text-[11px] text-muted-foreground">
-                            <Users className="mr-1.5 h-3 w-3 shrink-0" />
-                            <span>{test.visitors.toLocaleString("fr-FR")} visiteurs</span>
-                        </div>
-                    )}
-                    {test.assigned_to.length > 0 && (
-                        <div className="flex items-center text-[11px] text-muted-foreground">
-                            <User className="mr-1.5 h-3 w-3 shrink-0" />
-                            <span className="truncate">{test.assigned_to.join(", ")}</span>
-                        </div>
-                    )}
-                </div>
+                )}
             </CardContent>
-
-            {(test.tags.length > 0 || test.labels.length > 0) && (
-                <CardFooter className="p-4 pt-0 flex flex-wrap gap-1">
-                    {test.labels.slice(0, 2).map((label) => (
-                        <Badge key={label} variant="secondary" className="text-[9px] h-4 px-1 bg-primary/10 text-primary/70">
-                            {label}
-                        </Badge>
-                    ))}
-                    {test.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-[9px] h-4 px-1">
-                            {tag}
-                        </Badge>
-                    ))}
-                    {test.tags.length + test.labels.length > 5 && (
-                        <span className="text-[9px] text-muted-foreground">+{test.tags.length + test.labels.length - 5}</span>
-                    )}
-                </CardFooter>
-            )}
         </Card>
     );
 }

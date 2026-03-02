@@ -124,3 +124,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+@utility container {
+  width: 100%;
+  padding-inline: 1.5rem;
+}

@@ -177,10 +177,10 @@ export default function SettingsPage() {
                     <CardHeader>
                         <CardTitle className="text-sm font-semibold opacity-70">Configuration API</CardTitle>
                     </CardHeader>
-                    <CardContent className="text-xs space-y-2 opacity-60">
+                    <CardContent className="text-sm space-y-2 opacity-60">
                         <p><strong>AB Tasty Account ID:</strong> {process.env.NEXT_PUBLIC_ABT_ACCOUNT_ID || "Configuré"}</p>
                         <p><strong>Dernière synchronisation:</strong> Temps réel (bidirectionnel)</p>
-                        <p className="italic mt-4 text-[10px]">
+                        <p className="italic mt-4 text-xs">
                             Note: Pour modifier les clés API, veuillez mettre à jour votre fichier .env.local et redémarrer le serveur.
                         </p>
                     </CardContent>

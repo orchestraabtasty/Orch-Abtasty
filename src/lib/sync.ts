@@ -30,6 +30,14 @@ export function mergeTestData(
             url: campaign.url ?? null,
             labels: campaign.labels ?? [],
             visitors: campaign.visitors ?? 0,
+            // ABT enriched fields (read-only from ABT)
+            description: campaign.description ?? null,
+            test_note: campaign.test_note ?? null,
+            traffic_value: campaign.traffic_value ?? null,
+            report_token: campaign.report_token ?? null,
+            variations: campaign.variations ?? [],
+            goals: campaign.goals ?? [],
+            // Supabase metadata
             target_start_date: meta?.target_start_date ?? null,
             hypothesis: meta?.hypothesis ?? null,
             comment: meta?.comment ?? null,

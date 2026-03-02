@@ -4,10 +4,10 @@ import { useMemo, useState, useRef, useCallback } from "react";
 import { format, differenceInDays, addDays, startOfDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { getAbtStatusColor, getAbtStatusLabel } from "@/lib/status-mapping";
+import { getAbtStatusColor, getAbtStatusLabel, isTestPeriodLocked } from "@/lib/status-mapping";
 import { useUpdateTestDates } from "@/hooks/useTests";
 import type { Test } from "@/types/test";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface TestTimelineProps {
@@ -29,25 +29,51 @@ function toISODate(d: Date): string {
 }
 
 function getTestStart(test: Test): Date | null {
-    const raw = test.start_date || test.target_start_date;
+    // For live/stopped tests, the real ABT start date is the reference.
+    // For editable tests (not yet launched), prefer the user-defined target date.
+    const raw = isTestPeriodLocked(test.abt_status)
+        ? (test.start_date || test.created_at)
+        : (test.target_start_date || test.start_date || test.created_at);
     if (!raw) return null;
     const d = new Date(raw);
     return isNaN(d.getTime()) ? null : startOfDay(d);
 }
 
-function getTestEnd(test: Test, fallback: Date): Date {
-    const raw = test.end_date;
-    if (!raw) return startOfDay(fallback);
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? startOfDay(fallback) : startOfDay(d);
+function getTestEnd(test: Test, today: Date): Date {
+    // Live tests are open-ended: the bar always stretches to today
+    if (test.abt_status === "play") return startOfDay(today);
+    if (test.end_date) {
+        const d = new Date(test.end_date);
+        if (!isNaN(d.getTime())) return startOfDay(d);
+    }
+    // For editable tests with a target start but no end, show a 14-day preview window
+    if (!isTestPeriodLocked(test.abt_status) && test.target_start_date) {
+        const target = new Date(test.target_start_date);
+        if (!isNaN(target.getTime())) return startOfDay(addDays(target, 14));
+    }
+    return startOfDay(today);
 }
+
+const STATUS_LEGEND: { status: string; label: string }[] = [
+    { status: "pause", label: "Pause" },
+    { status: "in_qa", label: "QA" },
+    { status: "play", label: "En cours" },
+    { status: "stopped", label: "Arrêté" },
+];
 
 export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
     const today = startOfDay(new Date());
     const [halfWindow, setHalfWindow] = useState<WindowPreset>(30);
     const [offset, setOffset] = useState(0); // days to shift the window
+    const [statusFilter, setStatusFilter] = useState<string | null>(null);
     const updateDates = useUpdateTestDates();
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // ── Filter by status (legend click) ─────────────────────────────────────
+    const filteredTests = useMemo(() => {
+        if (!statusFilter) return tests;
+        return tests.filter((t) => (t.abt_status ?? null) === statusFilter);
+    }, [tests, statusFilter]);
 
     // ── Window calculation ──────────────────────────────────────────────────
     const minDate = startOfDay(addDays(today, -halfWindow + offset));
@@ -56,7 +82,7 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
 
     // ── Filter and map tests that intersect the window ─────────────────────
     const bars = useMemo(() => {
-        return tests
+        return filteredTests
             .map((test) => {
                 const start = getTestStart(test);
                 if (!start) return null;
@@ -72,7 +98,7 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
             })
             .filter(Boolean) as { test: Test; left: number; width: number; start: Date; end: Date }[];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tests, minDate.getTime(), maxDate.getTime(), totalDays]);
+    }, [filteredTests, minDate.getTime(), maxDate.getTime(), totalDays]);
 
     // ── Month labels ────────────────────────────────────────────────────────
     const monthLabels = useMemo(() => {
@@ -138,9 +164,10 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                     const newStart = addDays(dragState.current.origStart, daysShifted);
                     const duration = differenceInDays(dragState.current.origEnd, dragState.current.origStart);
                     const newEnd = addDays(newStart, duration);
+                    // Non-live tests: update planning date (target_start_date), not the real start
                     updateDates.mutate({
                         id: dragState.current.testId,
-                        start_date: toISODate(newStart),
+                        target_start_date: toISODate(newStart),
                         end_date: toISODate(newEnd),
                     });
                 }
@@ -197,9 +224,10 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                         newEnd = addDays(resizeState.current.origEnd, daysShifted);
                         if (newEnd <= newStart) newEnd = addDays(newStart, 1);
                     }
+                    // Non-live tests: resize updates target_start_date + end_date
                     updateDates.mutate({
                         id: resizeState.current.testId,
-                        start_date: toISODate(newStart),
+                        target_start_date: toISODate(newStart),
                         end_date: toISODate(newEnd),
                     });
                 }
@@ -227,7 +255,7 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                             type="button"
                             onClick={() => { setHalfWindow(p.value); setOffset(0); }}
                             className={cn(
-                                "text-[10px] font-medium px-2 py-0.5 rounded-full border transition-all",
+                                        "text-xs font-medium px-2 py-0.5 rounded-full border transition-all",
                                 halfWindow === p.value
                                     ? "bg-primary/15 text-primary border-primary/40"
                                     : "bg-transparent text-muted-foreground border-border/30 hover:border-border/60"
@@ -250,7 +278,7 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                     >
                         <ChevronLeft className="h-3.5 w-3.5" />
                     </Button>
-                    <span className="text-[11px] text-muted-foreground min-w-[160px] text-center">
+                    <span className="text-xs text-muted-foreground min-w-[160px] text-center">
                         {format(minDate, "d MMM", { locale: fr })} → {format(maxDate, "d MMM yyyy", { locale: fr })}
                     </span>
                     <Button
@@ -265,7 +293,7 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                         <button
                             type="button"
                             onClick={() => setOffset(0)}
-                            className="text-[10px] text-primary/70 hover:text-primary underline ml-1"
+                            className="text-xs text-primary/70 hover:text-primary underline ml-1"
                         >
                             Aujourd&apos;hui
                         </button>
@@ -274,35 +302,46 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
 
                 <div className="h-4 w-px bg-border/50" />
 
-                {/* ABT status legend */}
+                {/* ABT status legend (clic = filtre) */}
                 <div className="flex items-center gap-2 flex-wrap">
-                    {[
-                        { status: "play", label: "En cours" },
-                        { status: "pause", label: "Pause" },
-                        { status: "stopped", label: "Arrêté" },
-                        { status: "in_qa", label: "QA" },
-                    ].map(({ status, label }) => (
-                        <span
-                            key={status}
-                            className={cn(
-                                "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border",
-                                getAbtStatusColor(status)
-                            )}
+                    {STATUS_LEGEND.map(({ status, label }) => {
+                        const isActive = statusFilter === status;
+                        return (
+                            <button
+                                key={status}
+                                type="button"
+                                onClick={() => setStatusFilter((prev) => (prev === status ? null : status))}
+                                title={isActive ? `Afficher tous les statuts` : `Filtrer : ${label}`}
+                                className={cn(
+                                    "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border transition-all cursor-pointer",
+                                    getAbtStatusColor(status),
+                                    isActive && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                                )}
+                            >
+                                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                {label}
+                            </button>
+                        );
+                    })}
+                    {statusFilter && (
+                        <button
+                            type="button"
+                            onClick={() => setStatusFilter(null)}
+                            className="text-xs text-muted-foreground hover:text-foreground underline"
                         >
-                            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                            {label}
-                        </span>
-                    ))}
+                            Tous
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Time axis */}
             <div className="flex-none border-b px-4 py-1.5 bg-muted/10">
-                <div className="relative h-5 ml-48">
+                <div className="relative h-5 ml-72">
                     {monthLabels.map(({ label, left }) => (
                         <span
                             key={label}
-                            className="absolute text-[10px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap"
+                            className="absolute text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                             style={{ left: `${left}%`, transform: "translateX(-50%)" }}
                         >
                             {label}
@@ -312,15 +351,17 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
             </div>
 
             {/* Bar zone */}
-            <div className="flex-1 overflow-auto p-4 min-h-[200px]" ref={containerRef}>
+            <div className="flex-1 overflow-auto px-4 pt-6 pb-4 min-h-[200px]" ref={containerRef}>
                 <div className="relative" style={{ minHeight: `${Math.max(bars.length * 44, 120)}px` }}>
                     {/* Today marker */}
                     {todayLeft >= 0 && todayLeft <= 100 && (
                         <div
                             className="absolute top-0 bottom-0 w-px bg-primary/40 z-10 pointer-events-none"
-                            style={{ left: `calc(192px + ${todayLeft}% * (100% - 192px) / 100)` }}
+                            style={{ left: `calc(288px + ${todayLeft}% * (100% - 288px) / 100)` }}
                         >
-                            <span className="absolute -top-0.5 left-1 text-[9px] text-primary/60 font-medium whitespace-nowrap">
+                            <span
+                                className="absolute -top-5 text-xs text-primary/70 font-semibold whitespace-nowrap bg-background/80 rounded"
+                            >
                                 Aujourd&apos;hui
                             </span>
                         </div>
@@ -328,11 +369,17 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
 
                     {bars.length === 0 ? (
                         <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
-                            Aucun test avec des dates dans cette période.
+                            {statusFilter
+                                ? `Aucun test "${STATUS_LEGEND.find((s) => s.status === statusFilter)?.label ?? statusFilter}" avec des dates dans cette période.`
+                                : "Aucun test avec des dates dans cette période."}
                         </div>
                     ) : (
                         bars.map(({ test, left, width, start, end }, index) => {
                             const colorClasses = getAbtStatusColor(test.abt_status);
+                            const locked = isTestPeriodLocked(test.abt_status);
+                            const lockedTitle = locked
+                                ? `Période figée — ${getAbtStatusLabel(test.abt_status)} (lecture seule)`
+                                : `${test.name} — ${format(start, "dd/MM/yyyy", { locale: fr })} → ${format(end, "dd/MM/yyyy", { locale: fr })}\n${getAbtStatusLabel(test.abt_status)}`;
 
                             return (
                                 <div
@@ -342,7 +389,7 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                                 >
                                     {/* Test name label */}
                                     <div
-                                        className="flex-none w-48 shrink-0 truncate text-xs text-muted-foreground pr-3 cursor-pointer hover:text-foreground transition-colors"
+                                        className="flex-none w-72 shrink-0 truncate text-sm text-muted-foreground pl-3 pr-3 cursor-pointer hover:text-foreground transition-colors"
                                         onClick={() => onTestClick?.(test)}
                                         title={test.name}
                                     >
@@ -356,51 +403,61 @@ export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
                                             id={`bar-${test.id}`}
                                             className={cn(
                                                 "absolute inset-y-0 rounded-md border select-none group/bar",
-                                                colorClasses
+                                                colorClasses,
+                                                locked && "opacity-80"
                                             )}
                                             style={{
                                                 left: `${left}%`,
                                                 width: `${width}%`,
                                             }}
                                         >
-                                            {/* Left resize handle */}
-                                            <div
-                                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center z-20"
-                                                onMouseDown={(e) => handleResizeMouseDown(e, test, "left", start, end)}
-                                                title="Déplacer le début"
-                                            >
-                                                <div className="w-0.5 h-3 bg-current rounded-full" />
-                                            </div>
+                                            {/* Left resize handle — éditable uniquement */}
+                                            {!locked && (
+                                                <div
+                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center z-20"
+                                                    onMouseDown={(e) => handleResizeMouseDown(e, test, "left", start, end)}
+                                                    title="Déplacer le début"
+                                                >
+                                                    <div className="w-0.5 h-3 bg-current rounded-full" />
+                                                </div>
+                                            )}
 
-                                            {/* Draggable middle label */}
+                                            {/* Middle — drag si éditable, lecture seule sinon */}
                                             <div
-                                                className="absolute inset-0 mx-2 flex items-center justify-center cursor-grab active:cursor-grabbing overflow-hidden"
-                                                onMouseDown={(e) => handleBarMouseDown(e, test, start, end)}
-                                                onClick={(e) => {
-                                                    // Only fire click if not dragged
-                                                    e.stopPropagation();
-                                                    onTestClick?.(test);
-                                                }}
-                                                title={`${test.name} — ${format(start, "dd/MM/yyyy", { locale: fr })} → ${format(end, "dd/MM/yyyy", { locale: fr })}\n${getAbtStatusLabel(test.abt_status)}`}
+                                                className={cn(
+                                                    "absolute inset-0 mx-2 flex items-center justify-center overflow-hidden",
+                                                    locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                                                )}
+                                                onMouseDown={
+                                                    !locked
+                                                        ? (e) => handleBarMouseDown(e, test, start, end)
+                                                        : undefined
+                                                }
+                                                title={lockedTitle}
                                             >
-                                                <span className="text-[10px] font-medium truncate px-1 pointer-events-none">
+                                                {locked && (
+                                                    <Lock className="h-2.5 w-2.5 shrink-0 mr-1 opacity-60 pointer-events-none" />
+                                                )}
+                                                <span className="text-xs font-medium truncate px-1 pointer-events-none">
                                                     {test.abt_campaign_id ? `#${test.abt_campaign_id}` : test.name}
                                                 </span>
                                             </div>
 
-                                            {/* Right resize handle */}
-                                            <div
-                                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center z-20"
-                                                onMouseDown={(e) => handleResizeMouseDown(e, test, "right", start, end)}
-                                                title="Déplacer la fin"
-                                            >
-                                                <div className="w-0.5 h-3 bg-current rounded-full" />
-                                            </div>
+                                            {/* Right resize handle — éditable uniquement */}
+                                            {!locked && (
+                                                <div
+                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover/bar:opacity-100 transition-opacity flex items-center justify-center z-20"
+                                                    onMouseDown={(e) => handleResizeMouseDown(e, test, "right", start, end)}
+                                                    title="Déplacer la fin"
+                                                >
+                                                    <div className="w-0.5 h-3 bg-current rounded-full" />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* Date labels */}
-                                    <div className="flex-none w-28 text-[10px] text-muted-foreground shrink-0 pl-2">
+                                    <div className="flex-none w-[90px] text-xs text-muted-foreground shrink-0 pl-2">
                                         {format(start, "dd/MM")} → {format(end, "dd/MM")}
                                     </div>
                                 </div>

@@ -19,6 +19,16 @@ export interface Test {
     url: string | null;
     labels: string[];
     visitors: number;
+    // Description & notes from ABT
+    description?: string | null;
+    test_note?: string | null;
+    // Traffic allocation % and report link
+    traffic_value?: number | null;
+    report_token?: string | null;
+    // Variations from ABT
+    variations?: AbtVariationSummary[];
+    // Goals from ABT
+    goals?: AbtGoalSummary[];
     // Data from Supabase
     target_start_date: string | null;
     hypothesis: string | null;
@@ -29,6 +39,20 @@ export interface Test {
     updated_at: string;
     // Stats from ABT (optional)
     stats?: AbtCampaignStats | null;
+}
+
+export interface AbtVariationSummary {
+    id: number;
+    name: string;
+    traffic: number;
+    description?: string;
+    is_redirection?: boolean;
+}
+
+export interface AbtGoalSummary {
+    id: number;
+    name: string;
+    type?: string;
 }
 
 export interface AbtCampaignStats {

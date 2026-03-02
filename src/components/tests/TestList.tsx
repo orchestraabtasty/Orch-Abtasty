@@ -55,9 +55,11 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                             >
                                 <TableCell className="font-medium">
                                     <div className="flex flex-col">
-                                        <span>{test.name}</span>
+                                        <span title={test.name}>
+                                            {test.name.length > 50 ? `${test.name.slice(0, 50)}…` : test.name}
+                                        </span>
                                         {test.hypothesis && (
-                                            <span className="text-[10px] text-muted-foreground font-normal line-clamp-1 italic">
+                                            <span className="text-xs text-muted-foreground font-normal line-clamp-1 italic">
                                                 {test.hypothesis}
                                             </span>
                                         )}
@@ -75,7 +77,7 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                                 <TableCell className="text-sm">
                                     {test.assigned_to.length > 0 ? test.assigned_to.join(", ") : "-"}
                                 </TableCell>
-                                <TableCell className="text-right text-xs font-mono opacity-60">
+                                <TableCell className="text-right text-sm font-mono opacity-60">
                                     {test.abt_campaign_id || "-"}
                                 </TableCell>
                             </TableRow>

@@ -174,3 +174,13 @@ export const ALL_STATUSES: InternalStatus[] = [
     "live",
     "done",
 ];
+
+/**
+ * Returns true when the test's temporal period is locked and cannot be edited manually.
+ * - "play"    → test is live, end date = today (open-ended, read-only).
+ * - "stopped" → test is finished, period is frozen.
+ */
+export function isTestPeriodLocked(abtStatus: string | null | undefined): boolean {
+    if (!abtStatus) return false;
+    return abtStatus === "play" || abtStatus === "stopped";
+}

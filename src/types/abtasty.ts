@@ -17,6 +17,13 @@ export interface AbtCampaign {
     url?: string | null;
     labels?: string[];
     visitors?: number;
+    // Description & notes from ABT
+    description?: string | null;
+    test_note?: string | null;
+    // Traffic allocation percentage (0–100)
+    traffic_value?: number | null;
+    // Token pour lien direct vers le rapport ABT
+    report_token?: string | null;
     // Relations
     assigned_users?: string[];
     goals?: AbtGoal[];
@@ -40,12 +47,18 @@ export type AbtCampaignStatus =
 export interface AbtGoal {
     id: number;
     name: string;
+    type?: string;
+    target?: string;
 }
 
 export interface AbtVariation {
     id: number;
     name: string;
+    /** Traffic allocation in % (0–100) */
     traffic: number;
+    description?: string;
+    type?: string;
+    is_redirection?: boolean;
 }
 
 export interface AbtCampaignsResponse {

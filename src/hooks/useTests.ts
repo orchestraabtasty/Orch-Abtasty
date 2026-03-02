@@ -130,25 +130,41 @@ export function useUpdateTestDates() {
             id,
             start_date,
             end_date,
+            target_start_date,
         }: {
             id: string;
-            start_date: string;
-            end_date: string;
+            start_date?: string;
+            end_date?: string;
+            target_start_date?: string;
         }) => {
+            const payload: Record<string, string> = {};
+            if (start_date)         payload.start_date = start_date;
+            if (end_date)           payload.end_date = end_date;
+            if (target_start_date)  payload.target_start_date = target_start_date;
+
             const res = await fetch(`/api/abt/campaigns/${id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ start_date, end_date }),
+                body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error("Failed to update dates");
             return res.json();
         },
 
-        onMutate: async ({ id, start_date, end_date }) => {
+        onMutate: async ({ id, start_date, end_date, target_start_date }) => {
             await qc.cancelQueries({ queryKey: TESTS_KEY });
             const previous = qc.getQueryData<Test[]>(TESTS_KEY);
             qc.setQueryData<Test[]>(TESTS_KEY, (old) =>
-                old?.map((t) => (t.id === id ? { ...t, start_date, end_date } : t))
+                old?.map((t) =>
+                    t.id === id
+                        ? {
+                              ...t,
+                              ...(start_date        && { start_date }),
+                              ...(end_date          && { end_date }),
+                              ...(target_start_date && { target_start_date }),
+                          }
+                        : t
+                )
             );
             return { previous };
         },
