@@ -30,7 +30,7 @@ import { format, isValid, differenceInDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState, useEffect, useMemo, KeyboardEvent } from "react";
 import { getAbtStatusLabel, isTestPeriodLocked } from "@/lib/status-mapping";
-import type { InternalStatus } from "@/types/test";
+import type { InternalStatus, AbtVariationSummary, AbtGoalSummary } from "@/types/test";
 import { cn } from "@/lib/utils";
 
 export default function TestDetailPage() {
@@ -346,7 +346,7 @@ export default function TestDetailPage() {
                                                 )}
                                             </p>
                                             <div className="space-y-1.5">
-                                                {test.variations.map((v) => (
+                                                {test.variations.map((v: AbtVariationSummary) => (
                                                     <div key={v.id} className="flex items-center gap-3 bg-background/40 rounded-md px-3 py-2">
                                                         <span className="text-xs font-medium flex-1 truncate">{v.name}</span>
                                                         {v.is_redirection && (
@@ -374,7 +374,7 @@ export default function TestDetailPage() {
                                                 Objectifs ({test.goals.length})
                                             </p>
                                             <div className="flex flex-wrap gap-1.5">
-                                                {test.goals.map((g) => (
+                                                {test.goals.map((g: AbtGoalSummary) => (
                                                     <Badge key={g.id} variant="outline" className="text-xs h-6 px-2 border-primary/20 bg-primary/5">
                                                         {g.name}
                                                         {g.type && <span className="opacity-50 ml-1">· {g.type}</span>}
