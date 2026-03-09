@@ -5,9 +5,22 @@ export type InternalStatus =
     | "live"
     | "done";
 
+/** Distingue les campagnes ABT des idées du backlog ABT et des tests Orch purs */
+export type TestKind = "campaign" | "idea" | "orch";
+
+export interface TestGroup {
+    id: string;
+    name: string;
+    color: string | null;
+}
+
 export interface Test {
     id: string;
+    /** Source du test : campagne ABT, idée backlog ABT ou test Orch-only */
+    kind: TestKind;
     abt_campaign_id: string | null;
+    /** Pour les idées ABT : identifiant de l'idée dans ABT */
+    abt_idea_id: string | null;
     internal_status: InternalStatus;
     // Data from ABT API
     name: string;
@@ -39,6 +52,8 @@ export interface Test {
     updated_at: string;
     // Stats from ABT (optional)
     stats?: AbtCampaignStats | null;
+    // Groupes Orch associés au test
+    groups: TestGroup[];
 }
 
 export interface AbtVariationSummary {

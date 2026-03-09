@@ -25,12 +25,14 @@ import {
     Plus,
     Lock,
     Clock,
+    Layers,
 } from "lucide-react";
+import { GroupAssigner } from "@/components/groups/GroupAssigner";
 import { format, isValid, differenceInDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState, useEffect, useMemo, KeyboardEvent } from "react";
 import { getAbtStatusLabel, isTestPeriodLocked } from "@/lib/status-mapping";
-import type { InternalStatus, AbtVariationSummary, AbtGoalSummary } from "@/types/test";
+import type { InternalStatus, AbtVariationSummary, AbtGoalSummary, TestGroup } from "@/types/test";
 import { cn } from "@/lib/utils";
 
 export default function TestDetailPage() {
@@ -47,6 +49,7 @@ export default function TestDetailPage() {
     const [assignedTo, setAssignedTo] = useState<string[]>([]);
     const [assignedInput, setAssignedInput] = useState("");
 
+    const groups: TestGroup[] = (data as { groups?: TestGroup[] })?.groups ?? [];
     const test = data?.campaign
         ? {
               id: data.meta?.id || String(data.campaign.id),
@@ -72,6 +75,7 @@ export default function TestDetailPage() {
               report_token: data.campaign.report_token ?? null,
               variations: data.campaign.variations ?? [],
               goals: data.campaign.goals ?? [],
+              groups,
           }
         : data?.meta
           ? {
@@ -98,6 +102,7 @@ export default function TestDetailPage() {
                 report_token: null,
                 variations: [],
                 goals: [],
+                groups,
             }
           : null;
 
@@ -167,6 +172,14 @@ export default function TestDetailPage() {
         return differenceInDays(end, start);
     };
 
+    /** Jours depuis le lancement en live (start_date = date de lancement ABT, issue de start_datetime / live_at). */
+    const getDaysSinceLive = () => {
+        if (!test?.start_date || !["play", "active", "live"].includes(String(test.abt_status ?? "").toLowerCase())) return null;
+        const start = new Date(test.start_date);
+        if (!isValid(start)) return null;
+        return differenceInDays(new Date(), start);
+    };
+
     if (isLoading) return <div className="w-full px-6 py-10 text-muted-foreground">Chargement...</div>;
     if (error || !test)
         return (
@@ -176,6 +189,7 @@ export default function TestDetailPage() {
         );
 
     const duration = getDuration();
+    const daysSinceLive = getDaysSinceLive();
 
     return (
         <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -239,15 +253,24 @@ export default function TestDetailPage() {
                             </span>
                         </>
                     )}
-                    {duration !== null && (
-                        <>
-                            <span className="opacity-40">•</span>
-                            <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {duration}j
-                            </span>
-                        </>
-                    )}
+                                    {duration !== null && (
+                                        <>
+                                            <span className="opacity-40">•</span>
+                                            <span className="flex items-center gap-1">
+                                                <Calendar className="h-3 w-3" />
+                                                {duration}j
+                                            </span>
+                                        </>
+                                    )}
+                                    {daysSinceLive !== null && (
+                                        <>
+                                            <span className="opacity-40">•</span>
+                                            <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                                                <Activity className="h-3 w-3" />
+                                                En live depuis {daysSinceLive}j
+                                            </span>
+                                        </>
+                                    )}
                     {test.visitors > 0 && (
                         <>
                             <span className="opacity-40">•</span>
@@ -494,6 +517,49 @@ export default function TestDetailPage() {
                                         </Button>
                                     </div>
                                 </div>
+
+                                <Separator className="bg-border/40" />
+
+                                {/* Groupes (assignation, distincte des tags) */}
+                                {(data as { meta?: { id: string } })?.meta?.id && (
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                            <Layers className="w-4 h-4" />
+                                            Groupes
+                                        </label>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {groups.map((g) => (
+                                                <span
+                                                    key={g.id}
+                                                    className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium"
+                                                    style={{
+                                                        borderColor: (g.color ?? "#6b7280") + "40",
+                                                        backgroundColor: (g.color ?? "#6b7280") + "15",
+                                                    }}
+                                                >
+                                                    <span
+                                                        className="h-2 w-2 rounded-full shrink-0"
+                                                        style={{ backgroundColor: g.color ?? "#6b7280" }}
+                                                    />
+                                                    {g.name}
+                                                </span>
+                                            ))}
+                                            <GroupAssigner
+                                                testId={(data as { meta: { id: string } }).meta.id}
+                                                assignedGroups={groups}
+                                                trigger={
+                                                    <button
+                                                        type="button"
+                                                        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border/50 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                                                    >
+                                                        <Plus className="h-3 w-3" />
+                                                        {groups.length ? "Modifier" : "Ajouter à un groupe"}
+                                                    </button>
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 <Separator className="bg-border/40" />
 

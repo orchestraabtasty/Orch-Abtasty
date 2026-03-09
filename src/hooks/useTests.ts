@@ -7,6 +7,9 @@ import type { Test, InternalStatus } from "@/types/test";
 
 const TESTS_KEY = ["tests"] as const;
 
+/** Délai pendant lequel les données sont considérées fraîches (pas de refetch automatique). */
+const TESTS_STALE_TIME_MS = 2 * 60 * 1000; // 2 minutes
+
 export function useTests() {
     return useQuery({
         queryKey: TESTS_KEY,
@@ -16,6 +19,8 @@ export function useTests() {
             const json = await res.json();
             return json.data;
         },
+        staleTime: TESTS_STALE_TIME_MS,
+        gcTime: 10 * 60 * 1000, // garder en cache 10 min après dernier usage
     });
 }
 

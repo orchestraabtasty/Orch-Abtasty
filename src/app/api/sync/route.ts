@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import { getCampaigns } from "@/lib/abtasty";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { mapAbtToInternal } from "@/lib/status-mapping";
+import { requireApproved } from "@/lib/auth-server";
 
 /**
  * POST /api/sync — Manual sync trigger.
  * Fetches all campaigns from ABT and upserts them into Supabase.
  * Only updates fields that come from ABT (name, type, dates, status mapping).
  */
-export async function POST() {
+export async function POST(req: Request) {
+    const authError = await requireApproved(req);
+    if (authError) return authError;
     try {
         const campaigns = await getCampaigns();
 

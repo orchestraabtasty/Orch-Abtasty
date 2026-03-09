@@ -1,5 +1,5 @@
-import type { Test } from "@/types/test";
-import type { AbtCampaign } from "@/types/abtasty";
+import type { Test, TestGroup } from "@/types/test";
+import type { AbtCampaign, AbtIdea } from "@/types/abtasty";
 import { mapAbtToInternal } from "@/lib/status-mapping";
 
 /**
@@ -9,17 +9,21 @@ import { mapAbtToInternal } from "@/lib/status-mapping";
  */
 export function mergeTestData(
     abtCampaigns: AbtCampaign[],
-    supabaseRows: Partial<Test>[]
+    supabaseRows: Partial<Test>[],
+    groupsMap: Map<string, TestGroup[]> = new Map()
 ): Test[] {
     const supabaseMap = new Map(supabaseRows.map((r) => [r.abt_campaign_id, r]));
 
     return abtCampaigns.map((campaign): Test => {
         const meta = supabaseMap.get(String(campaign.id));
         const abtMappedStatus = mapAbtToInternal(campaign.status);
+        const testId = meta?.id ?? String(campaign.id);
 
         return {
-            id: meta?.id ?? String(campaign.id),
+            id: testId,
+            kind: "campaign",
             abt_campaign_id: String(campaign.id),
+            abt_idea_id: null,
             internal_status: abtMappedStatus ?? meta?.internal_status ?? "idea",
             name: campaign.name,
             type: campaign.type ?? null,
@@ -46,6 +50,7 @@ export function mergeTestData(
             created_at: meta?.created_at ?? campaign.created_at ?? new Date().toISOString(),
             updated_at: meta?.updated_at ?? new Date().toISOString(),
             stats: null,
+            groups: groupsMap.get(testId) ?? [],
         };
     });
 }
@@ -53,10 +58,15 @@ export function mergeTestData(
 /**
  * Maps a Supabase row (Orch-only test, abt_campaign_id = null) to Test.
  */
-export function rowToTest(row: Partial<Test> & { id: string }): Test {
+export function rowToTest(
+    row: Partial<Test> & { id: string },
+    groupsMap: Map<string, TestGroup[]> = new Map()
+): Test {
     return {
         id: row.id,
+        kind: row.kind ?? "orch",
         abt_campaign_id: row.abt_campaign_id ?? null,
+        abt_idea_id: row.abt_idea_id ?? null,
         internal_status: (row.internal_status as Test["internal_status"]) ?? "idea",
         name: row.name ?? "",
         type: row.type ?? null,
@@ -74,5 +84,46 @@ export function rowToTest(row: Partial<Test> & { id: string }): Test {
         created_at: row.created_at ?? new Date().toISOString(),
         updated_at: row.updated_at ?? new Date().toISOString(),
         stats: null,
+        groups: groupsMap.get(row.id) ?? [],
+    };
+}
+
+/**
+ * Maps an AB Tasty idea to a Test object (kind = "idea").
+ */
+export function ideaToTest(
+    idea: AbtIdea,
+    groupsMap: Map<string, TestGroup[]> = new Map()
+): Test {
+    const ideaId = `idea-${idea.id}`;
+    return {
+        id: ideaId,
+        kind: "idea",
+        abt_campaign_id: null,
+        abt_idea_id: String(idea.id),
+        internal_status: "idea",
+        name: idea.name ?? "",
+        type: null,
+        abt_status: idea.status ?? null,
+        start_date: null,
+        end_date: null,
+        url: null,
+        labels: [],
+        visitors: 0,
+        description: idea.description ?? null,
+        test_note: null,
+        traffic_value: null,
+        report_token: null,
+        variations: [],
+        goals: [],
+        target_start_date: null,
+        hypothesis: idea.description ?? null,
+        comment: null,
+        tags: Array.isArray(idea.tags) ? idea.tags : [],
+        assigned_to: [],
+        created_at: idea.created_at ?? new Date().toISOString(),
+        updated_at: idea.updated_at ?? new Date().toISOString(),
+        stats: null,
+        groups: groupsMap.get(ideaId) ?? [],
     };
 }

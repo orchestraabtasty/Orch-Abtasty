@@ -72,3 +72,36 @@ export interface AbtApiError {
     message: string;
     status: number;
 }
+
+// ─── Ideas (Backlog ABT) ──────────────────────────────────────────────────────
+
+export interface AbtIdea {
+    id: string | number;
+    name: string;
+    description?: string | null;
+    status?: string | null;
+    tags?: string[];
+    created_at?: string | null;
+    updated_at?: string | null;
+    [key: string]: unknown;
+}
+
+export interface AbtIdeasResponse {
+    _data: AbtIdea[];
+    _pagination?: {
+        _page: number;
+        _pages: number;
+        _max_per_page: number;
+        _total: number;
+    };
+}
+
+export type CreateIdeaPayload = {
+    name: string;
+    description?: string;
+    status?: string;
+    tags?: string[];
+    [key: string]: unknown;
+};
+
+export type UpdateIdeaPayload = Partial<CreateIdeaPayload>;

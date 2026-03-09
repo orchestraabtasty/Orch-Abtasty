@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { requireApproved } from "@/lib/auth-server";
 import type { Test } from "@/types/test";
 
 /**
@@ -8,6 +9,8 @@ import type { Test } from "@/types/test";
  * Returns the created test (id = Supabase row id).
  */
 export async function POST(req: Request) {
+    const authError = await requireApproved(req);
+    if (authError) return authError;
     try {
         const body = await req.json();
         const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -48,7 +51,9 @@ export async function POST(req: Request) {
 
         const test: Test = {
             id: data.id,
+            kind: "orch",
             abt_campaign_id: null,
+            abt_idea_id: null,
             internal_status: data.internal_status ?? "idea",
             name: data.name,
             type: null,
@@ -66,6 +71,7 @@ export async function POST(req: Request) {
             created_at: data.created_at ?? now,
             updated_at: data.updated_at ?? now,
             stats: null,
+            groups: [],
         };
 
         return NextResponse.json(test);

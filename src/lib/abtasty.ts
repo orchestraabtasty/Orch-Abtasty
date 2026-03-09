@@ -2,6 +2,10 @@ import type {
     AbtTokenResponse,
     AbtCampaign,
     AbtCampaignsResponse,
+    AbtIdea,
+    AbtIdeasResponse,
+    CreateIdeaPayload,
+    UpdateIdeaPayload,
 } from "@/types/abtasty";
 
 const BASE_URL = process.env.ABT_API_BASE_URL ?? "https://api.abtasty.com";
@@ -78,6 +82,48 @@ async function abtFetch<T>(path: string): Promise<T> {
 }
 
 /**
+ * Makes an authenticated POST request to the AB Tasty API.
+ */
+async function abtPost<T>(path: string, body: object): Promise<T> {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`ABT API POST error: ${res.status} ${path} — ${text}`);
+    }
+
+    return res.json();
+}
+
+/**
+ * Makes an authenticated DELETE request to the AB Tasty API.
+ */
+async function abtDelete(path: string): Promise<void> {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`ABT API DELETE error: ${res.status} ${path} — ${text}`);
+    }
+}
+
+/**
  * Makes an authenticated PATCH request to the AB Tasty API.
  */
 async function abtPatch<T>(path: string, body: object): Promise<T> {
@@ -107,7 +153,7 @@ function mapAbtTest(t: any): AbtCampaign {
     const masterName: string | undefined = m.name;
     const localeLabel: string | undefined = t.master ? t.name : undefined;
 
-    // Dates: prefer explicit datetime strings, fall back to readable_date objects
+    // Date de lancement en live : start_datetime ou live_at (ABT n’expose pas de champ dédié "live_at" en lecture, on utilise cette date comme référence "depuis combien de temps en live").
     const liveDateRaw: string | null =
         m.start_datetime ??
         (m.live_at?.timestamp > 0 ? m.live_at.readable_date : null) ??
@@ -199,12 +245,16 @@ export async function getCampaigns(): Promise<AbtCampaign[]> {
         const pages: number = first._pagination?._pages ?? 1;
         let items: any[] = first._data ?? [];
 
-        for (let page = 2; page <= pages; page++) {
-            const next = await abtFetch<any>(
-                `/api/v1/accounts/${ACCOUNT_ID}/tests?_page=${page}&_max_per_page=50`
+        if (pages > 1) {
+            const rest = await Promise.all(
+                Array.from({ length: pages - 1 }, (_, i) =>
+                    abtFetch<any>(
+                        `/api/v1/accounts/${ACCOUNT_ID}/tests?_page=${i + 2}&_max_per_page=50`
+                    )
+                )
             );
-            if (Array.isArray(next._data)) {
-                items = items.concat(next._data);
+            for (const next of rest) {
+                if (Array.isArray(next._data)) items = items.concat(next._data);
             }
         }
 
@@ -234,9 +284,116 @@ export async function updateCampaignStatus(
     id: number | string,
     status: string
 ): Promise<AbtCampaign> {
-    // Public API: PATCH /api/v1/accounts/[account_id]/tests/[test_id]
     return abtPatch<AbtCampaign>(
         `/api/v1/accounts/${ACCOUNT_ID}/tests/${id}`,
         { status }
     );
+}
+
+/**
+ * Updates arbitrary fields of a campaign in AB Tasty (dates, etc.).
+ * Only includes fields that ABT accepts (status, start_datetime, stop_datetime…).
+ */
+export async function updateCampaign(
+    id: number | string,
+    payload: {
+        status?: string;
+        start_datetime?: string | null;
+        stop_datetime?: string | null;
+        [key: string]: unknown;
+    }
+): Promise<void> {
+    await abtPatch<unknown>(
+        `/api/v1/accounts/${ACCOUNT_ID}/tests/${id}`,
+        payload
+    );
+}
+
+// ─── Ideas (Backlog ABT) ──────────────────────────────────────────────────────
+
+// Flag mémoire pour désactiver définitivement les idées si l'API répond 403
+let ideasDisabled = false;
+
+/**
+ * Fetches all ideas for the configured account.
+ * Si l'API répond 403 une fois, on désactive définitivement les appels suivants
+ * pour ne pas ralentir le chargement.
+ */
+export async function getIdeas(): Promise<AbtIdea[]> {
+    if (ideasDisabled) {
+        return [];
+    }
+    try {
+        const first = await abtFetch<AbtIdeasResponse>(
+            `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`
+        );
+
+        const pages: number = first._pagination?._pages ?? 1;
+        let items: AbtIdea[] = first._data ?? [];
+
+        for (let page = 2; page <= pages; page++) {
+            const next = await abtFetch<AbtIdeasResponse>(
+                `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=${page}&_max_per_page=50`
+            );
+            if (Array.isArray(next._data)) {
+                items = items.concat(next._data);
+            }
+        }
+
+        return items;
+    } catch (error) {
+        const msg = String(error ?? "");
+        // Gestion « bug-friendly » : si l'API idées n'est pas accessible (403 / Forbidden),
+        // on considère simplement qu'il n'y a pas d'idées disponibles pour ce compte
+        // et on laisse le reste de l'app fonctionner normalement.
+        if (msg.includes("403") || msg.toLowerCase().includes("forbidden")) {
+            console.warn(
+                "[abtasty] getIdeas disabled for this account (403 Forbidden). " +
+                    "Backlog d'idées ignoré, les campagnes continuent de se charger normalement."
+            );
+            ideasDisabled = true;
+            return [];
+        }
+        console.error("[abtasty] getIdeas error:", error);
+        throw error;
+    }
+}
+
+/**
+ * Fetches a single idea by ID.
+ */
+export async function getIdea(ideaId: string | number): Promise<AbtIdea> {
+    return abtFetch<AbtIdea>(
+        `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`
+    );
+}
+
+/**
+ * Creates a new idea in AB Tasty.
+ */
+export async function createIdea(payload: CreateIdeaPayload): Promise<AbtIdea> {
+    return abtPost<AbtIdea>(
+        `/api/v1/accounts/${ACCOUNT_ID}/ideas`,
+        payload
+    );
+}
+
+/**
+ * Updates an existing idea in AB Tasty.
+ */
+export async function updateIdea(
+    ideaId: string | number,
+    payload: UpdateIdeaPayload
+): Promise<AbtIdea> {
+    return abtPatch<AbtIdea>(
+        `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`,
+        payload
+    );
+}
+
+/**
+ * Deletes an idea from AB Tasty.
+ */
+export async function deleteIdea(ideaId: string | number): Promise<void> {
+    await abtDelete(`/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`);
 }

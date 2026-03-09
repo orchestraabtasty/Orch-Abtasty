@@ -66,7 +66,7 @@ const STATUS_LEGEND: { status: string; label: string }[] = [
 
 export function TestTimeline({ tests, onTestClick }: TestTimelineProps) {
     const today = startOfDay(new Date());
-    const [halfWindow, setHalfWindow] = useState<WindowPreset>(30);
+    const [halfWindow, setHalfWindow] = useState<WindowPreset>(90);
     const [offset, setOffset] = useState(0); // days to shift the window
     const [statusFilter, setStatusFilter] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(TIMELINE_INITIAL);

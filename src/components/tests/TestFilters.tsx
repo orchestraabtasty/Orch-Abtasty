@@ -8,14 +8,17 @@ import {
     DropdownMenuContent,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuCheckboxItem,
+    DropdownMenuItem,
     DropdownMenuSeparator,
     DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { Search, X, ArrowUpDown, ChevronDown } from "lucide-react";
+import { Search, X, ArrowUpDown, ChevronDown, Layers } from "lucide-react";
 import { getTypeColor } from "@/lib/status-mapping";
 import type { Test } from "@/types/test";
 import { cn } from "@/lib/utils";
 import { useMemo } from "react";
+import { useGroups } from "@/hooks/useGroups";
 
 // ── Sort ────────────────────────────────────────────────────────────────────
 export type SortKey =
@@ -48,12 +51,15 @@ export interface FilterState {
     search: string;
     types: string[];
     sort: SortKey;
+    /** IDs des groupes sélectionnés comme filtre (vide = tous les tests) */
+    groups: string[];
 }
 
 export const EMPTY_FILTERS: FilterState = {
     search: "",
     types: [],
     sort: "default",
+    groups: [],
 };
 
 const FILTERS_STORAGE_KEY = "orch-abtasty-filters";
@@ -77,7 +83,8 @@ export function loadFiltersFromStorage(): FilterState | null {
         const search = typeof o.search === "string" ? o.search : "";
         const types = Array.isArray(o.types) ? o.types.filter((t): t is string => typeof t === "string") : [];
         const sort = isValidSortKey(o.sort) ? o.sort : "default";
-        return { search, types, sort };
+        const groups = Array.isArray(o.groups) ? o.groups.filter((g): g is string => typeof g === "string") : [];
+        return { search, types, sort, groups };
     } catch {
         return null;
     }
@@ -112,6 +119,12 @@ export function applyFilters(tests: Test[], filters: FilterState): Test[] {
         }
         if (filters.types.length > 0 && !filters.types.includes(t.type ?? "")) {
             return false;
+        }
+        if (filters.groups.length > 0) {
+            const testGroupIds = (t.groups ?? []).map((g) => g.id);
+            if (!filters.groups.some((gId) => testGroupIds.includes(gId))) {
+                return false;
+            }
         }
         return true;
     });
@@ -157,8 +170,10 @@ export function TestFilters({ filters, onChange, tests }: TestFiltersProps) {
         return Array.from(types).sort();
     }, [tests]);
 
+    const { data: availableGroups = [] } = useGroups();
+
     const hasActiveFilters =
-        filters.search !== "" || filters.types.length > 0 || filters.sort !== "default";
+        filters.search !== "" || filters.types.length > 0 || filters.sort !== "default" || filters.groups.length > 0;
 
     const toggleType = (type: string) => {
         const next = filters.types.includes(type)
@@ -213,9 +228,87 @@ export function TestFilters({ filters, onChange, tests }: TestFiltersProps) {
                 </>
             )}
 
-            {/* Sort — poussé à droite */}
+            {/* Sort + filtre groupe — poussés à droite */}
             <div className="ml-auto flex items-center gap-2">
                 <div className="h-5 w-px bg-border/50" />
+
+                {/* Filtre par groupe (multi-select) */}
+                {availableGroups.length > 0 && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className={cn(
+                                    "h-8 flex items-center gap-1.5 pl-2.5 pr-2 rounded-md border text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-ring",
+                                    filters.groups.length > 0
+                                        ? "border-primary/50 text-primary bg-primary/5 hover:bg-primary/10"
+                                        : "border-border/50 text-muted-foreground bg-background/50 hover:border-border/80 hover:text-foreground"
+                                )}
+                            >
+                                <Layers className="h-3.5 w-3.5 shrink-0" />
+                                {filters.groups.length > 0 && (
+                                    <span className="flex items-center gap-1 shrink-0">
+                                        {filters.groups.slice(0, 4).map((gId) => {
+                                            const g = availableGroups.find((x) => x.id === gId);
+                                            return g ? (
+                                                <span
+                                                    key={g.id}
+                                                    className="w-2 h-2 rounded-full border border-white/50 shrink-0"
+                                                    style={{ backgroundColor: g.color ?? "#6b7280" }}
+                                                    title={g.name}
+                                                />
+                                            ) : null;
+                                        })}
+                                        {filters.groups.length > 4 && (
+                                            <span className="text-[10px] text-muted-foreground">+{filters.groups.length - 4}</span>
+                                        )}
+                                    </span>
+                                )}
+                                <span className="max-w-[120px] truncate">
+                                    {filters.groups.length === 0
+                                        ? "Tous les groupes"
+                                        : filters.groups.length === 1
+                                            ? availableGroups.find((g) => g.id === filters.groups[0])?.name ?? "1 groupe"
+                                            : `${filters.groups.length} groupes`}
+                                </span>
+                                <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuLabel className="text-xs uppercase tracking-wider text-muted-foreground font-semibold px-2 py-1">
+                                Filtrer par groupe
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                className="text-xs cursor-pointer"
+                                onClick={() => onChange({ ...filters, groups: [] })}
+                            >
+                                Tous les groupes
+                            </DropdownMenuItem>
+                            {availableGroups.map((group) => (
+                                <DropdownMenuCheckboxItem
+                                    key={group.id}
+                                    checked={filters.groups.includes(group.id)}
+                                    onCheckedChange={(checked) => {
+                                        const next = checked
+                                            ? [...filters.groups, group.id]
+                                            : filters.groups.filter((id) => id !== group.id);
+                                        onChange({ ...filters, groups: next });
+                                    }}
+                                    className="text-xs cursor-pointer flex items-center gap-2"
+                                >
+                                    <span
+                                        className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/40"
+                                        style={{ backgroundColor: group.color ?? "#6b7280" }}
+                                    />
+                                    {group.name}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
+
+                {/* Tri */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <button

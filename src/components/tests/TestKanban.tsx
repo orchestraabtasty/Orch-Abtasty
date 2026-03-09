@@ -20,11 +20,11 @@ interface TestKanbanProps {
 // ─── Lifecycle stages ────────────────────────────────────────────────────────
 
 const LIFECYCLE_STAGES = [
-    { key: "idea",     label: "Idée",       color: "bg-gray-500/15 text-gray-300 border-gray-500/30",   dot: "bg-gray-400" },
-    { key: "creating", label: "Création",   color: "bg-blue-500/15 text-blue-300 border-blue-500/30",   dot: "bg-blue-400" },
+    { key: "idea",     label: "Idée",       color: "bg-gray-500/15 text-gray-300 border-gray-500/30",       dot: "bg-gray-400" },
     { key: "paused",   label: "En pause",   color: "bg-orange-500/15 text-orange-300 border-orange-500/30", dot: "bg-orange-400" },
-    { key: "staging",  label: "Recette",    color: "bg-amber-500/15 text-amber-300 border-amber-500/30", dot: "bg-amber-400" },
-    { key: "live",     label: "Live",       color: "bg-green-500/15 text-green-300 border-green-500/30",  dot: "bg-green-400" },
+    { key: "creating", label: "Création",   color: "bg-blue-500/15 text-blue-300 border-blue-500/30",       dot: "bg-blue-400" },
+    { key: "staging",  label: "Recette",    color: "bg-amber-500/15 text-amber-300 border-amber-500/30",    dot: "bg-amber-400" },
+    { key: "live",     label: "Live",       color: "bg-green-500/15 text-green-300 border-green-500/30",    dot: "bg-green-400" },
     { key: "done",     label: "Terminé",    color: "bg-purple-500/15 text-purple-300 border-purple-500/30", dot: "bg-purple-400" },
 ] as const;
 

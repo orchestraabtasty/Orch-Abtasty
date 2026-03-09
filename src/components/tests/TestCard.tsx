@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { TypeBadge } from "./TypeBadge";
 import { getAbtStatusLabel, getTypeBorderLeftClass } from "@/lib/status-mapping";
 import type { Test } from "@/types/test";
-import { Calendar, User, Clock, Users } from "lucide-react";
+import { Calendar, User, Clock, Users, Lightbulb, Layers } from "lucide-react";
+import { GroupAssigner } from "@/components/groups/GroupAssigner";
 import { format, differenceInDays, isValid } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -67,9 +68,21 @@ export function TestCard({ test, onClick, className }: TestCardProps) {
             onClick={onClick}
         >
             <CardContent className="p-3 space-y-2">
-                {/* Ligne 1 : type + ID + durée */}
+                {/* Ligne 1 : type + ID + durée + badge source */}
                 <div className="flex items-center justify-between gap-2">
-                    <TypeBadge type={test.type} />
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <TypeBadge type={test.type} />
+                        {test.kind === "idea" && (
+                            <Badge
+                                variant="outline"
+                                className="text-xs h-4 px-1 font-medium flex items-center gap-0.5 bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                title="Idée ABT Tasty"
+                            >
+                                <Lightbulb className="h-2 w-2" />
+                                Idée
+                            </Badge>
+                        )}
+                    </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                         {durationBadge && (
                             <Badge
@@ -140,6 +153,30 @@ export function TestCard({ test, onClick, className }: TestCardProps) {
                         )}
                     </div>
                 )}
+
+                {/* Ligne 6 : groupes + bouton assignation */}
+                {(test.groups.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        <Layers className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+                        {test.groups.slice(0, 3).map((group) => (
+                            <span
+                                key={group.id}
+                                className="text-[10px] px-1 py-0 rounded-full border font-medium"
+                                style={{
+                                    backgroundColor: group.color ? `${group.color}20` : undefined,
+                                    borderColor: group.color ? `${group.color}50` : undefined,
+                                    color: group.color ?? undefined,
+                                }}
+                            >
+                                {group.name}
+                            </span>
+                        ))}
+                        {test.groups.length > 3 && (
+                            <span className="text-[10px] text-muted-foreground">+{test.groups.length - 3}</span>
+                        )}
+                    </div>
+                )}
+                <GroupAssigner testId={test.id} assignedGroups={test.groups} />
             </CardContent>
         </Card>
     );
