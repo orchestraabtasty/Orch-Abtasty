@@ -9,6 +9,7 @@ import {
     useUnassignGroup,
     useCreateGroup,
     useUpdateGroup,
+    useDeleteGroup,
 } from "@/hooks/useGroups";
 import type { Test, TestGroup } from "@/types/test";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Layers, Plus, AlertCircle } from "lucide-react";
+import { Layers, Plus, AlertCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function GroupColumnHeader({ group, count }: { group: TestGroup; count: number }) {
@@ -43,6 +44,7 @@ export default function GroupsPage() {
     const unassignGroup = useUnassignGroup();
     const createGroup = useCreateGroup();
     const updateGroup = useUpdateGroup();
+    const deleteGroup = useDeleteGroup();
 
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [search, setSearch] = useState("");
@@ -179,7 +181,7 @@ export default function GroupsPage() {
                                     <div
                                         key={g.id}
                                         className={cn(
-                                            "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors",
+                                            "group/row w-full flex items-center gap-1 px-2 py-1.5 rounded-md text-sm transition-colors",
                                             g.id === activeGroup?.id
                                                 ? "bg-primary/10 text-primary border border-primary/40"
                                                 : "hover:bg-muted/60"
@@ -207,6 +209,24 @@ export default function GroupsPage() {
                                             className="h-5 w-5 min-w-5 rounded border border-border/50 cursor-pointer shrink-0 bg-transparent"
                                             title="Changer la couleur"
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!confirm(`Supprimer le groupe "${g.name}" ? Les tests associés ne seront pas supprimés.`)) return;
+                                                // Si on supprime le groupe actif, sélectionner le suivant disponible
+                                                if (g.id === selectedGroupId) {
+                                                    const next = groups.find((x) => x.id !== g.id);
+                                                    setSelectedGroupId(next?.id ?? null);
+                                                }
+                                                deleteGroup.mutate(g.id);
+                                            }}
+                                            disabled={deleteGroup.isPending}
+                                            className="h-5 w-5 min-w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                                            title="Supprimer ce groupe"
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
