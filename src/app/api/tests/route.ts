@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { requireApproved } from "@/lib/auth-server";
+import { requireModifier } from "@/lib/auth-server";
 import type { Test } from "@/types/test";
 
 /**
@@ -9,7 +9,7 @@ import type { Test } from "@/types/test";
  * Returns the created test (id = Supabase row id).
  */
 export async function POST(req: Request) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     try {
         const body = await req.json();

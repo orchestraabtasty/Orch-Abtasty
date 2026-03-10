@@ -1,10 +1,15 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabaseBrowser } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
     Table,
@@ -14,11 +19,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Users, UserPlus, Trash2, Mail, Shield, Clock, CheckCircle, XCircle, RefreshCw, UserCog } from "lucide-react";
-import { useState } from "react";
+import { Users, Mail, Shield, ShieldCheck, Clock, CheckCircle, XCircle, RefreshCw, UserCog, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
-import type { TeamMember } from "@/types/test";
 import { useAuth } from "@/context/AuthContext";
+import type { UserRole } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -27,60 +31,39 @@ interface UserProfile {
     id: string;
     email: string;
     name: string | null;
-    role: "admin" | "member";
+    role: UserRole;
     status: "pending" | "approved" | "rejected";
     created_at: string;
 }
+
+const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: React.ReactNode }> = {
+    super_admin: {
+        label: "Super Admin",
+        className: "bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/30",
+        icon: <ShieldCheck className="h-3 w-3" />,
+    },
+    admin: {
+        label: "Admin",
+        className: "bg-primary/15 text-primary border-primary/30",
+        icon: <Shield className="h-3 w-3" />,
+    },
+    member: {
+        label: "Membre",
+        className: "bg-muted text-muted-foreground border-border/50",
+        icon: <Users className="h-3 w-3" />,
+    },
+    view: {
+        label: "Lecture seule",
+        className: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
+        icon: <Eye className="h-3 w-3" />,
+    },
+};
 
 export default function SettingsPage() {
     const queryClient = useQueryClient();
     const { profile: currentProfile } = useAuth();
 
-    const [newName, setNewName] = useState("");
-    const [newEmail, setNewEmail] = useState("");
-    const [newRole, setNewRole] = useState("");
-
-    // ── Membres d'équipe (team_members) ──────────────────────────────────
-    const { data: members, isLoading: isLoadingMembers } = useQuery({
-        queryKey: ["team-members"],
-        queryFn: async () => {
-            const { data, error } = await supabaseBrowser
-                .from("team_members")
-                .select("*")
-                .order("name");
-            if (error) throw error;
-            return data as TeamMember[];
-        },
-    });
-
-    const addMember = useMutation({
-        mutationFn: async () => {
-            if (!newName) throw new Error("Le nom est requis");
-            const { error } = await supabaseBrowser.from("team_members").insert([
-                { name: newName, email: newEmail || null, role: newRole || null },
-            ]);
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["team-members"] });
-            setNewName("");
-            setNewEmail("");
-            setNewRole("");
-            toast.success("Membre ajouté !");
-        },
-        onError: (err) => toast.error(`Erreur: ${err.message}`),
-    });
-
-    const removeMember = useMutation({
-        mutationFn: async (id: string) => {
-            const { error } = await supabaseBrowser.from("team_members").delete().eq("id", id);
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["team-members"] });
-            toast.success("Membre supprimé.");
-        },
-    });
+    const isAdmin = currentProfile?.role === "admin" || currentProfile?.role === "super_admin";
 
     // ── Profils utilisateurs (admin seulement) ─────────────────────────
     const { data: profiles, isLoading: isLoadingProfiles } = useQuery({
@@ -91,7 +74,7 @@ export default function SettingsPage() {
             const json = await res.json();
             return json.data as UserProfile[];
         },
-        enabled: currentProfile?.role === "admin",
+        enabled: isAdmin,
     });
 
     const pendingProfiles = profiles?.filter((p) => p.status === "pending") ?? [];
@@ -123,10 +106,43 @@ export default function SettingsPage() {
         toast.info("Compte refusé.");
     };
 
-    const handleToggleRole = (profile: UserProfile) => {
-        const newRole = profile.role === "admin" ? "member" : "admin";
+    const handleChangeRole = (profile: UserProfile, newRole: UserRole) => {
+        if (newRole === profile.role) return;
         updateProfile.mutate({ id: profile.id, role: newRole });
-        toast.success(`Rôle mis à jour : ${newRole === "admin" ? "Admin" : "Membre"}`);
+        toast.success(`Rôle mis à jour : ${ROLE_CONFIG[newRole].label}`);
+    };
+
+    /** Rôles qu'un admin peut assigner (sans super_admin, réservé au super_admin) */
+    const assignableRoles = (currentProfile?.role === "super_admin"
+        ? (["super_admin", "admin", "member", "view"] as UserRole[])
+        : (["admin", "member", "view"] as UserRole[])
+    );
+
+    /** Peut-on modifier le rôle d'un profil donné ? */
+    const canEditRole = (p: UserProfile) => {
+        if (p.id === currentProfile?.id) return false;
+        if (p.role === "super_admin" && currentProfile?.role !== "super_admin") return false;
+        return true;
+    };
+
+    const deleteUser = useMutation({
+        mutationFn: async (id: string) => {
+            const res = await fetch(`/api/admin/profiles/${id}`, { method: "DELETE" });
+            if (!res.ok) {
+                const json = await res.json().catch(() => ({}));
+                throw new Error(json.error ?? "Erreur lors de la suppression");
+            }
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+            toast.success("Utilisateur supprimé.");
+        },
+        onError: (err) => toast.error(`Erreur : ${err.message}`),
+    });
+
+    const handleDelete = (profile: UserProfile) => {
+        if (!confirm(`Supprimer définitivement le compte de ${profile.name ?? profile.email} ? Cette action est irréversible.`)) return;
+        deleteUser.mutate(profile.id);
     };
 
     const statusConfig = {
@@ -134,6 +150,8 @@ export default function SettingsPage() {
         approved: { label: "Approuvé", className: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30" },
         rejected: { label: "Refusé", className: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30" },
     };
+
+    const isAdminSection = isAdmin;
 
     return (
         <div className="container max-w-4xl py-10 space-y-8">
@@ -144,7 +162,7 @@ export default function SettingsPage() {
 
             <div className="grid gap-8">
                 {/* ── Utilisateurs en attente (admin only) ─────────────────── */}
-                {currentProfile?.role === "admin" && pendingProfiles.length > 0 && (
+                {isAdminSection && pendingProfiles.length > 0 && (
                     <Card className="border-amber-500/30 bg-amber-500/5 shadow-sm">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
@@ -204,6 +222,16 @@ export default function SettingsPage() {
                                                             <XCircle className="mr-1 h-3.5 w-3.5" />
                                                             Refuser
                                                         </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => handleDelete(p)}
+                                                            disabled={deleteUser.isPending}
+                                                            title="Supprimer définitivement"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -216,7 +244,7 @@ export default function SettingsPage() {
                 )}
 
                 {/* ── Gestion des utilisateurs (admin only) ─────────────────── */}
-                {currentProfile?.role === "admin" && (
+                {isAdminSection && (
                     <Card className="border-border/40 shadow-sm bg-card/30 backdrop-blur-sm">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -250,21 +278,43 @@ export default function SettingsPage() {
                                                         {p.email}
                                                     </TableCell>
                                                     <TableCell>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => p.id !== currentProfile?.id && handleToggleRole(p)}
-                                                            className={cn(
-                                                                "inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border transition-colors",
-                                                                p.role === "admin"
-                                                                    ? "bg-primary/15 text-primary border-primary/30"
-                                                                    : "bg-muted text-muted-foreground border-border/50",
-                                                                p.id !== currentProfile?.id && "cursor-pointer hover:opacity-80"
-                                                            )}
-                                                            title={p.id === currentProfile?.id ? "Vous ne pouvez pas modifier votre propre rôle" : "Cliquer pour changer le rôle"}
-                                                        >
-                                                            {p.role === "admin" ? <Shield className="h-3 w-3" /> : null}
-                                                            {p.role === "admin" ? "Admin" : "Membre"}
-                                                        </button>
+                                                        {canEditRole(p) ? (
+                                                            <Select
+                                                                value={p.role}
+                                                                onValueChange={(val) => handleChangeRole(p, val as UserRole)}
+                                                                disabled={updateProfile.isPending}
+                                                            >
+                                                                <SelectTrigger className={cn(
+                                                                    "h-7 w-auto min-w-[130px] text-xs font-medium border rounded-full px-2 py-0.5 gap-1.5",
+                                                                    ROLE_CONFIG[p.role].className
+                                                                )}>
+                                                                    <SelectValue>
+                                                                        <span className="flex items-center gap-1">
+                                                                            {ROLE_CONFIG[p.role].icon}
+                                                                            {ROLE_CONFIG[p.role].label}
+                                                                        </span>
+                                                                    </SelectValue>
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {assignableRoles.map((r) => (
+                                                                        <SelectItem key={r} value={r}>
+                                                                            <span className="flex items-center gap-1.5 text-xs">
+                                                                                {ROLE_CONFIG[r].icon}
+                                                                                {ROLE_CONFIG[r].label}
+                                                                            </span>
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        ) : (
+                                                            <span className={cn(
+                                                                "inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border",
+                                                                ROLE_CONFIG[p.role].className
+                                                            )}>
+                                                                {ROLE_CONFIG[p.role].icon}
+                                                                {ROLE_CONFIG[p.role].label}
+                                                            </span>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         <span className={cn(
@@ -301,6 +351,18 @@ export default function SettingsPage() {
                                                                     <XCircle className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             )}
+                                                            {p.id !== currentProfile?.id && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                                    onClick={() => handleDelete(p)}
+                                                                    disabled={deleteUser.isPending}
+                                                                    title="Supprimer définitivement"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -312,105 +374,6 @@ export default function SettingsPage() {
                         </CardContent>
                     </Card>
                 )}
-
-                {/* ── Team Management ──────────────────────────────────────── */}
-                <Card className="border-border/40 shadow-sm bg-card/30 backdrop-blur-sm">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Users className="w-5 h-5 text-primary" />
-                            Membres de l&apos;équipe
-                        </CardTitle>
-                        <CardDescription>
-                            Ajoutez les personnes qui pourront être assignées aux tests.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="flex flex-col md:flex-row gap-3">
-                            <Input
-                                placeholder="Nom complet"
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                className="flex-1"
-                            />
-                            <Input
-                                placeholder="Email (optionnel)"
-                                value={newEmail}
-                                onChange={(e) => setNewEmail(e.target.value)}
-                                className="flex-[1.5]"
-                            />
-                            <Input
-                                placeholder="Rôle (ex: CRO, Product)"
-                                value={newRole}
-                                onChange={(e) => setNewRole(e.target.value)}
-                                className="flex-1"
-                            />
-                            <Button onClick={() => addMember.mutate()} disabled={addMember.isPending}>
-                                <UserPlus className="w-4 h-4 mr-2" />
-                                Ajouter
-                            </Button>
-                        </div>
-
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Nom</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Rôle</TableHead>
-                                        <TableHead className="w-[50px]"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLoadingMembers ? (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-8 opacity-50">
-                                                Chargement...
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : !members || members.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                                Aucun membre configuré.
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        members.map((member) => (
-                                            <TableRow key={member.id} className="group">
-                                                <TableCell className="font-medium">{member.name}</TableCell>
-                                                <TableCell className="text-sm text-muted-foreground">
-                                                    {member.email ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <Mail className="w-3 h-3" />
-                                                            {member.email}
-                                                        </div>
-                                                    ) : "-"}
-                                                </TableCell>
-                                                <TableCell className="text-sm">
-                                                    {member.role ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <Shield className="w-3 h-3 opacity-50" />
-                                                            {member.role}
-                                                        </div>
-                                                    ) : "-"}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => removeMember.mutate(member.id)}
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </CardContent>
-                </Card>
 
                 {/* API Info Card */}
                 <Card className="border-primary/10 bg-primary/5">

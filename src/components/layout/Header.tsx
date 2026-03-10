@@ -13,11 +13,19 @@ import {
     DropdownMenuSeparator,
     DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { RefreshCw, LayoutDashboard, Settings, Layers, LogIn, LogOut, User, Shield } from "lucide-react";
+import { RefreshCw, LayoutDashboard, Settings, Layers, LogIn, LogOut, User, Shield, ShieldCheck, Eye } from "lucide-react";
 import { useRefreshTests } from "@/hooks/useTests";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import type { UserRole } from "@/context/AuthContext";
+
+const ROLE_BADGE: Record<UserRole, { label: string; className: string; icon: React.ReactNode }> = {
+    super_admin: { label: "Super Admin", className: "bg-violet-500/15 text-violet-600 dark:text-violet-400", icon: <ShieldCheck className="h-2.5 w-2.5" /> },
+    admin: { label: "Admin", className: "bg-primary/15 text-primary", icon: <Shield className="h-2.5 w-2.5" /> },
+    member: { label: "Membre", className: "bg-muted text-muted-foreground", icon: <User className="h-2.5 w-2.5" /> },
+    view: { label: "Lecture seule", className: "bg-sky-500/15 text-sky-600 dark:text-sky-400", icon: <Eye className="h-2.5 w-2.5" /> },
+};
 
 export function Header() {
     const pathname = usePathname();
@@ -27,7 +35,7 @@ export function Header() {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const isApproved = profile?.status === "approved";
-    const isAdmin = profile?.role === "admin";
+    const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -128,7 +136,7 @@ export function Header() {
                                     className="flex items-center gap-2 rounded-full border border-border/50 px-2.5 py-1.5 text-sm hover:bg-muted/50 transition-colors"
                                 >
                                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary shrink-0">
-                                        {isAdmin ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                                        {profile?.role === "super_admin" ? <ShieldCheck className="h-3.5 w-3.5" /> : isAdmin ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
                                     </div>
                                     <span className="hidden sm:block text-xs font-medium max-w-[100px] truncate">
                                         {profile?.name ?? profile?.email ?? user.email ?? "Compte"}
@@ -139,13 +147,15 @@ export function Header() {
                                 <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
                                     <p className="font-semibold text-foreground truncate">{profile?.name ?? "Utilisateur"}</p>
                                     <p className="truncate opacity-60 text-[11px]">{profile?.email ?? user.email}</p>
-                                    <span className={cn(
-                                        "inline-flex items-center gap-1 mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full",
-                                        isAdmin ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                                    )}>
-                                        {isAdmin ? <Shield className="h-2.5 w-2.5" /> : <User className="h-2.5 w-2.5" />}
-                                        {isAdmin ? "Admin" : "Membre"}
-                                    </span>
+                                    {profile?.role && (
+                                        <span className={cn(
+                                            "inline-flex items-center gap-1 mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                                            ROLE_BADGE[profile.role].className
+                                        )}>
+                                            {ROLE_BADGE[profile.role].icon}
+                                            {ROLE_BADGE[profile.role].label}
+                                        </span>
+                                    )}
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem

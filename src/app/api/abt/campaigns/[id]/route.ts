@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCampaign, updateCampaign, updateCampaignStatus } from "@/lib/abtasty";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { mapInternalToAbt } from "@/lib/status-mapping";
-import { requireApproved } from "@/lib/auth-server";
+import { requireApproved, requireModifier } from "@/lib/auth-server";
 import type { InternalStatus } from "@/types/test";
 
 interface Params {
@@ -67,7 +67,7 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     const { id } = await params;
     try {

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { requireApproved } from "@/lib/auth-server";
+import { requireModifier } from "@/lib/auth-server";
 
 /**
  * POST /api/groups/assign — Assigne un test à un groupe.
  * Body: { group_id: string, test_id: string }
  */
 export async function POST(req: Request) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     try {
         const body = await req.json();
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
  * Body: { group_id: string, test_id: string }
  */
 export async function DELETE(req: Request) {
-    const authError2 = await requireApproved(req);
+    const authError2 = await requireModifier(req);
     if (authError2) return authError2;
     try {
         const body = await req.json();

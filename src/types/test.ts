@@ -77,14 +77,6 @@ export interface AbtCampaignStats {
     confidence?: number;
 }
 
-export interface TeamMember {
-    id: string;
-    name: string;
-    email: string | null;
-    role: string | null;
-    created_at: string;
-}
-
 export interface StatusHistoryEntry {
     id: string;
     test_id: string;

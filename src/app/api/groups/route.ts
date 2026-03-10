@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { requireApproved } from "@/lib/auth-server";
+import { requireApproved, requireModifier } from "@/lib/auth-server";
 
 /**
  * GET /api/groups — Liste tous les groupes.
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
  * Body: { name: string, color?: string, description?: string }
  */
 export async function POST(req: Request) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     try {
         const body = await req.json();

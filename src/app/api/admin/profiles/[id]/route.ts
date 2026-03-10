@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { requireAdmin } from "@/lib/auth-server";
+import { requireAdmin, getAuthenticatedUserId } from "@/lib/auth-server";
 
 interface Params {
     params: Promise<{ id: string }>;
@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (body.status && ["pending", "approved", "rejected"].includes(body.status)) {
         updates.status = body.status;
     }
-    if (body.role && ["admin", "member"].includes(body.role)) {
+    if (body.role && ["super_admin", "admin", "member", "view"].includes(body.role)) {
         updates.role = body.role;
     }
 
@@ -42,4 +42,40 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     return NextResponse.json(data);
+}
+
+/**
+ * DELETE /api/admin/profiles/:id — Supprime un utilisateur (profil + compte auth) — admin uniquement.
+ * Un admin ne peut pas se supprimer lui-même.
+ */
+export async function DELETE(req: Request, { params }: Params) {
+    const { id } = await params;
+
+    const authError = await requireAdmin(req);
+    if (authError) return authError;
+
+    const callerId = await getAuthenticatedUserId();
+    if (callerId === id) {
+        return NextResponse.json({ error: "Vous ne pouvez pas supprimer votre propre compte." }, { status: 400 });
+    }
+
+    try {
+        // Tentative de suppression du compte Auth (cascade supprime aussi le profil)
+        const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+
+        if (authError) {
+            console.error("[DELETE profile] auth.admin.deleteUser error:", authError);
+            // Fallback : supprimer uniquement le profil public si l'utilisateur auth n'existe pas
+            const { error: profileError } = await supabaseAdmin.from("profiles").delete().eq("id", id);
+            if (profileError) {
+                console.error("[DELETE profile] profiles delete error:", profileError);
+                return NextResponse.json({ error: profileError.message }, { status: 500 });
+            }
+        }
+    } catch (err) {
+        console.error("[DELETE profile] Unexpected error:", err);
+        return NextResponse.json({ error: String(err) }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
 }

@@ -58,7 +58,7 @@ export async function requireApproved(_req: Request): Promise<NextResponse | nul
 }
 
 /**
- * Returns an error response if the caller is not an approved admin.
+ * Returns an error response if the caller is not an approved admin (admin ou super_admin).
  */
 export async function requireAdmin(_req: Request): Promise<NextResponse | null> {
     const userId = await getAuthenticatedUserId();
@@ -77,8 +77,36 @@ export async function requireAdmin(_req: Request): Promise<NextResponse | null> 
         return NextResponse.json({ error: "Account not approved" }, { status: 403 });
     }
 
-    if (profile?.role !== "admin") {
+    if (!["admin", "super_admin"].includes(profile?.role)) {
         return NextResponse.json({ error: "Forbidden: admin only" }, { status: 403 });
+    }
+
+    return null;
+}
+
+/**
+ * Returns an error response if the caller is not approved or has a "view" role (lecture seule).
+ * Use this on write operations (POST, PATCH, DELETE) to block view-only users.
+ */
+export async function requireModifier(_req: Request): Promise<NextResponse | null> {
+    const userId = await getAuthenticatedUserId();
+
+    if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("status, role")
+        .eq("id", userId)
+        .single();
+
+    if (profile?.status !== "approved") {
+        return NextResponse.json({ error: "Account not approved" }, { status: 403 });
+    }
+
+    if (profile?.role === "view") {
+        return NextResponse.json({ error: "Forbidden: read-only account" }, { status: 403 });
     }
 
     return null;

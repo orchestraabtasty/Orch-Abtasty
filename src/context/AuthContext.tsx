@@ -4,11 +4,13 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { supabaseBrowser } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
+export type UserRole = "super_admin" | "admin" | "member" | "view";
+
 export interface UserProfile {
     id: string;
     email: string;
     name: string | null;
-    role: "admin" | "member";
+    role: UserRole;
     status: "pending" | "approved" | "rejected";
 }
 

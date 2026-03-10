@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCampaigns } from "@/lib/abtasty";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { mapAbtToInternal } from "@/lib/status-mapping";
-import { requireApproved } from "@/lib/auth-server";
+import { requireModifier } from "@/lib/auth-server";
 
 /**
  * POST /api/sync — Manual sync trigger.
@@ -10,7 +10,7 @@ import { requireApproved } from "@/lib/auth-server";
  * Only updates fields that come from ABT (name, type, dates, status mapping).
  */
 export async function POST(req: Request) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     try {
         const campaigns = await getCampaigns();

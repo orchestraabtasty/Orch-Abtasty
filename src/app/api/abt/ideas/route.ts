@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIdeas, createIdea } from "@/lib/abtasty";
-import { requireApproved } from "@/lib/auth-server";
+import { requireApproved, requireModifier } from "@/lib/auth-server";
 import type { CreateIdeaPayload } from "@/types/abtasty";
 
 /**
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
  * Body: { name: string, description?: string, status?: string, tags?: string[] }
  */
 export async function POST(req: Request) {
-    const authError2 = await requireApproved(req);
+    const authError2 = await requireModifier(req);
     if (authError2) return authError2;
     try {
         const body = await req.json() as CreateIdeaPayload;

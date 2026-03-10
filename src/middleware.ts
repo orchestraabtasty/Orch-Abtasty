@@ -72,8 +72,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
-    // Settings réservé aux admins
-    if (isAdminOnly(pathname) && role !== "admin") {
+    // Settings réservé aux admins et super_admin
+    if (isAdminOnly(pathname) && !["admin", "super_admin"].includes(role)) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 

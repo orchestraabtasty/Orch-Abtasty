@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { requireApproved } from "@/lib/auth-server";
+import { requireModifier } from "@/lib/auth-server";
 
 interface Params {
     params: Promise<{ id: string }>;
@@ -10,7 +10,7 @@ interface Params {
  * PATCH /api/groups/:id — Met à jour un groupe (nom, couleur, description).
  */
 export async function PATCH(req: Request, { params }: Params) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     const { id } = await params;
     try {
@@ -42,7 +42,7 @@ export async function PATCH(req: Request, { params }: Params) {
  * DELETE /api/groups/:id — Supprime un groupe (et ses associations via CASCADE).
  */
 export async function DELETE(req: Request, { params }: Params) {
-    const authError = await requireApproved(req);
+    const authError = await requireModifier(req);
     if (authError) return authError;
     const { id } = await params;
     const { error } = await supabaseAdmin.from("groups").delete().eq("id", id);
