@@ -12,6 +12,7 @@ const BASE_URL = process.env.ABT_API_BASE_URL ?? "https://api.abtasty.com";
 const CLIENT_ID = process.env.ABT_CLIENT_ID ?? "";
 const CLIENT_SECRET = process.env.ABT_CLIENT_SECRET ?? "";
 const ACCOUNT_ID = process.env.ABT_ACCOUNT_ID ?? "";
+const IDEAS_TOKEN_FALLBACK = process.env.ABT_IDEAS_TOKEN ?? "";
 
 // In-memory token cache (valid for the lifetime of a serverless function call)
 let cachedToken: { access_token: string; expires_at: number } | null = null;
@@ -79,6 +80,97 @@ async function abtFetch<T>(path: string): Promise<T> {
     }
 
     return res.json();
+}
+
+/**
+ * Fetch dédié aux idées AB Tasty (backlog), qui utilisent un schéma d'auth différent :
+ * Authorization: token <__APP2WT__>
+ */
+function resolveIdeasToken(token?: string): string {
+    const t = token || IDEAS_TOKEN_FALLBACK;
+    if (!t) {
+        throw new Error("Missing ideas token (__APP2WT__). Provide cookie or ABT_IDEAS_TOKEN.");
+    }
+    return t;
+}
+
+async function ideasFetch<T>(path: string, token?: string): Promise<T> {
+    const t = resolveIdeasToken(token);
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+        headers: {
+            Authorization: `token ${t}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+        },
+        cache: "no-store",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`ABT Ideas API error: ${res.status} ${path} — ${text}`);
+    }
+
+    return res.json();
+}
+
+async function ideasPost<T>(path: string, body: object, token?: string): Promise<T> {
+    const t = resolveIdeasToken(token);
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "POST",
+        headers: {
+            Authorization: `token ${t}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`ABT Ideas API POST error: ${res.status} ${path} — ${text}`);
+    }
+
+    return res.json();
+}
+
+async function ideasPatch<T>(path: string, body: object, token?: string): Promise<T> {
+    const t = resolveIdeasToken(token);
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "PATCH",
+        headers: {
+            Authorization: `token ${t}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`ABT Ideas API PATCH error: ${res.status} ${path} — ${text}`);
+    }
+
+    return res.json();
+}
+
+async function ideasDelete(path: string, token?: string): Promise<void> {
+    const t = resolveIdeasToken(token);
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `token ${t}`,
+            Accept: "application/json",
+        },
+        cache: "no-store",
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`ABT Ideas API DELETE error: ${res.status} ${path} — ${text}`);
+    }
 }
 
 /**
@@ -319,21 +411,23 @@ let ideasDisabled = false;
  * Si l'API répond 403 une fois, on désactive définitivement les appels suivants
  * pour ne pas ralentir le chargement.
  */
-export async function getIdeas(): Promise<AbtIdea[]> {
+export async function getIdeas(token?: string): Promise<AbtIdea[]> {
     if (ideasDisabled) {
         return [];
     }
     try {
-        const first = await abtFetch<AbtIdeasResponse>(
-            `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`
+        const first = await ideasFetch<AbtIdeasResponse>(
+            `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`,
+            token
         );
 
         const pages: number = first._pagination?._pages ?? 1;
         let items: AbtIdea[] = first._data ?? [];
 
         for (let page = 2; page <= pages; page++) {
-            const next = await abtFetch<AbtIdeasResponse>(
-                `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=${page}&_max_per_page=50`
+            const next = await ideasFetch<AbtIdeasResponse>(
+                `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=${page}&_max_per_page=50`,
+                token
             );
             if (Array.isArray(next._data)) {
                 items = items.concat(next._data);
@@ -362,19 +456,21 @@ export async function getIdeas(): Promise<AbtIdea[]> {
 /**
  * Fetches a single idea by ID.
  */
-export async function getIdea(ideaId: string | number): Promise<AbtIdea> {
-    return abtFetch<AbtIdea>(
-        `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`
+export async function getIdea(ideaId: string | number, token?: string): Promise<AbtIdea> {
+    return ideasFetch<AbtIdea>(
+        `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`,
+        token
     );
 }
 
 /**
  * Creates a new idea in AB Tasty.
  */
-export async function createIdea(payload: CreateIdeaPayload): Promise<AbtIdea> {
-    return abtPost<AbtIdea>(
+export async function createIdea(payload: CreateIdeaPayload, token?: string): Promise<AbtIdea> {
+    return ideasPost<AbtIdea>(
         `/api/v1/accounts/${ACCOUNT_ID}/ideas`,
-        payload
+        payload,
+        token
     );
 }
 
@@ -383,17 +479,19 @@ export async function createIdea(payload: CreateIdeaPayload): Promise<AbtIdea> {
  */
 export async function updateIdea(
     ideaId: string | number,
-    payload: UpdateIdeaPayload
+    payload: UpdateIdeaPayload,
+    token?: string
 ): Promise<AbtIdea> {
-    return abtPatch<AbtIdea>(
+    return ideasPatch<AbtIdea>(
         `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`,
-        payload
+        payload,
+        token
     );
 }
 
 /**
  * Deletes an idea from AB Tasty.
  */
-export async function deleteIdea(ideaId: string | number): Promise<void> {
-    await abtDelete(`/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`);
+export async function deleteIdea(ideaId: string | number, token?: string): Promise<void> {
+    await ideasDelete(`/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`, token);
 }

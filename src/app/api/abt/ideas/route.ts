@@ -10,6 +10,7 @@ export async function GET(req: Request) {
     const authError = await requireApproved(req);
     if (authError) return authError;
     try {
+        // Utilise ABT_IDEAS_TOKEN depuis .env.local (voir lib/abtasty.ts)
         const ideas = await getIdeas();
         return NextResponse.json({ data: ideas });
     } catch (err) {
@@ -37,10 +38,12 @@ export async function POST(req: Request) {
     if (authError2) return authError2;
     try {
         const body = await req.json() as CreateIdeaPayload;
-        if (!body.name || typeof body.name !== "string" || !body.name.trim()) {
-            return NextResponse.json({ error: "name is required" }, { status: 400 });
+        const title = typeof body.title === "string" ? body.title.trim() : "";
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!title && !name) {
+            return NextResponse.json({ error: "title (or name) is required" }, { status: 400 });
         }
-        const idea = await createIdea({ ...body, name: body.name.trim() });
+        const idea = await createIdea({ ...body, title: title || undefined, name: name || undefined });
         return NextResponse.json(idea, { status: 201 });
     } catch (err) {
         console.error("[ideas] POST error:", err);

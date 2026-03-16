@@ -77,10 +77,15 @@ export interface AbtApiError {
 
 export interface AbtIdea {
     id: string | number;
-    name: string;
+    /** Selon l’endpoint, le libellé peut être `title` (observé) ou `name` (fallback). */
+    title?: string;
+    name?: string;
     description?: string | null;
+    hypothesis?: string | null;
     status?: string | null;
     tags?: string[];
+    scores?: Record<string, number> | null;
+    start_date?: { readable_date?: string; timestamp?: number; pattern?: string } | null;
     created_at?: string | null;
     updated_at?: string | null;
     [key: string]: unknown;
@@ -97,7 +102,10 @@ export interface AbtIdeasResponse {
 }
 
 export type CreateIdeaPayload = {
-    name: string;
+    /** AB Tasty utilise généralement `title` pour les idées. */
+    title?: string;
+    /** Fallback (certaines docs parlent de `name`). */
+    name?: string;
     description?: string;
     status?: string;
     tags?: string[];
