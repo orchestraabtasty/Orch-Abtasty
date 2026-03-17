@@ -18,6 +18,13 @@ export async function GET(req: Request) {
             }),
         ]);
 
+        console.log(
+            "[campaigns] fetched from ABT — campaigns:",
+            abtCampaigns.length,
+            "ideas:",
+            abtIdeas.length
+        );
+
         // 2. Fetch metadata and groups from Supabase (in parallel)
         const [supabaseResult, groupsResult, groupTestsResult] = await Promise.all([
             supabaseAdmin.from("tests").select("*"),
@@ -105,6 +112,13 @@ export async function GET(req: Request) {
         });
 
         const tests: Test[] = [...merged, ...orchOnly, ...ideas];
+
+        console.log(
+            "[campaigns] final tests payload — total:",
+            tests.length,
+            "ideas in payload:",
+            tests.filter((t) => t.kind === "idea").length
+        );
 
         return NextResponse.json({ data: tests });
     } catch (err) {

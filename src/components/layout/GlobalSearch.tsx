@@ -39,6 +39,9 @@ export function GlobalSearch() {
                       t.name.toLowerCase().includes(q) ||
                       (t.type ?? "").toLowerCase().includes(q) ||
                       (t.abt_campaign_id ?? "").toLowerCase().includes(q) ||
+                      (t.abt_idea_id ?? "").toLowerCase().includes(q) ||
+                      (t.hypothesis ?? "").toLowerCase().includes(q) ||
+                      (t.description ?? "").toLowerCase().includes(q) ||
                       t.tags.some((tag) => tag.toLowerCase().includes(q))
                   );
               })
@@ -78,7 +81,8 @@ export function GlobalSearch() {
     }, []);
 
     const navigate = useCallback((test: Test) => {
-        router.push(`/tests/${test.abt_campaign_id || test.id}`);
+        const slug = test.abt_campaign_id ?? test.id;
+        router.push(`/tests/${slug}`);
         setOpen(false);
         setQuery("");
     }, [router]);
@@ -151,8 +155,13 @@ export function GlobalSearch() {
                             )}
                         >
                             {/* Type badge */}
-                            <span className="mt-0.5 shrink-0 text-xs font-bold uppercase px-1.5 py-0.5 rounded border border-border/50 bg-muted text-muted-foreground font-mono min-w-[36px] text-center">
-                                {test.type ?? "—"}
+                            <span className={cn(
+                                "mt-0.5 shrink-0 text-xs font-bold uppercase px-1.5 py-0.5 rounded border font-mono min-w-[36px] text-center",
+                                test.kind === "idea"
+                                    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                    : "border-border/50 bg-muted text-muted-foreground"
+                            )}>
+                                {test.kind === "idea" ? "IDÉE" : (test.type ?? "—")}
                             </span>
                             <div className="flex-1 min-w-0">
                                 <p className="text-xs font-medium text-foreground truncate">
@@ -161,6 +170,11 @@ export function GlobalSearch() {
                                 {test.abt_campaign_id && (
                                     <p className="text-xs text-muted-foreground font-mono">
                                         #{test.abt_campaign_id}
+                                    </p>
+                                )}
+                                {test.abt_idea_id && !test.abt_campaign_id && (
+                                    <p className="text-xs text-muted-foreground font-mono">
+                                        idée #{test.abt_idea_id}
                                     </p>
                                 )}
                             </div>

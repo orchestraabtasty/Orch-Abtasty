@@ -12,6 +12,9 @@ const BASE_URL = process.env.ABT_API_BASE_URL ?? "https://api.abtasty.com";
 const CLIENT_ID = process.env.ABT_CLIENT_ID ?? "";
 const CLIENT_SECRET = process.env.ABT_CLIENT_SECRET ?? "";
 const ACCOUNT_ID = process.env.ABT_ACCOUNT_ID ?? "";
+// Certaines installs AB Tasty exposent les idées sur un autre compte que les tests.
+// Si ABT_IDEAS_ACCOUNT_ID est défini, on l'utilise pour /ideas, sinon on retombe sur ABT_ACCOUNT_ID.
+const IDEAS_ACCOUNT_ID = process.env.ABT_IDEAS_ACCOUNT_ID ?? ACCOUNT_ID;
 const IDEAS_TOKEN_FALLBACK = process.env.ABT_IDEAS_TOKEN ?? "";
 
 // In-memory token cache (valid for the lifetime of a serverless function call)
@@ -84,12 +87,12 @@ async function abtFetch<T>(path: string): Promise<T> {
 
 /**
  * Fetch dédié aux idées AB Tasty (backlog), qui utilisent un schéma d'auth différent :
- * Authorization: token <__APP2WT__>
+ * Authorization: Bearer <token> (comme dans Postman).
  */
 function resolveIdeasToken(token?: string): string {
     const t = token || IDEAS_TOKEN_FALLBACK;
     if (!t) {
-        throw new Error("Missing ideas token (__APP2WT__). Provide cookie or ABT_IDEAS_TOKEN.");
+        throw new Error("Missing ideas token (ABT_IDEAS_TOKEN). Provide the Bearer token as used in Postman.");
     }
     return t;
 }
@@ -97,9 +100,10 @@ function resolveIdeasToken(token?: string): string {
 async function ideasFetch<T>(path: string, token?: string): Promise<T> {
     const t = resolveIdeasToken(token);
 
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const url = `${BASE_URL}${path}`;
+    const res = await fetch(url, {
         headers: {
-            Authorization: `token ${t}`,
+            Authorization: `Bearer ${t}`,
             "Content-Type": "application/json",
             Accept: "application/json",
         },
@@ -108,10 +112,14 @@ async function ideasFetch<T>(path: string, token?: string): Promise<T> {
 
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`ABT Ideas API error: ${res.status} ${path} — ${text}`);
+        throw new Error(`ABT Ideas API error: ${res.status} ${url} — ${text}`);
     }
 
-    return res.json();
+    const json = await res.json();
+    // Log très détaillé pour debug (compte, URL, taille data)
+    const len = Array.isArray((json as any)?.data) ? (json as any).data.length : -1;
+    console.log("[abtasty] ideasFetch OK:", url, "items:", len);
+    return json;
 }
 
 async function ideasPost<T>(path: string, body: object, token?: string): Promise<T> {
@@ -119,7 +127,7 @@ async function ideasPost<T>(path: string, body: object, token?: string): Promise
     const res = await fetch(`${BASE_URL}${path}`, {
         method: "POST",
         headers: {
-            Authorization: `token ${t}`,
+            Authorization: `Bearer ${t}`,
             "Content-Type": "application/json",
             Accept: "application/json",
         },
@@ -140,7 +148,7 @@ async function ideasPatch<T>(path: string, body: object, token?: string): Promis
     const res = await fetch(`${BASE_URL}${path}`, {
         method: "PATCH",
         headers: {
-            Authorization: `token ${t}`,
+            Authorization: `Bearer ${t}`,
             "Content-Type": "application/json",
             Accept: "application/json",
         },
@@ -161,7 +169,7 @@ async function ideasDelete(path: string, token?: string): Promise<void> {
     const res = await fetch(`${BASE_URL}${path}`, {
         method: "DELETE",
         headers: {
-            Authorization: `token ${t}`,
+            Authorization: `Bearer ${t}`,
             Accept: "application/json",
         },
         cache: "no-store",
@@ -403,53 +411,26 @@ export async function updateCampaign(
 
 // ─── Ideas (Backlog ABT) ──────────────────────────────────────────────────────
 
-// Flag mémoire pour désactiver définitivement les idées si l'API répond 403
-let ideasDisabled = false;
-
 /**
  * Fetches all ideas for the configured account.
- * Si l'API répond 403 une fois, on désactive définitivement les appels suivants
- * pour ne pas ralentir le chargement.
+ * En cas d'erreur (401/403/timeout…), on loggue et on renvoie simplement [].
  */
 export async function getIdeas(token?: string): Promise<AbtIdea[]> {
-    if (ideasDisabled) {
-        return [];
-    }
     try {
+        console.log("[abtasty] getIdeas: calling ideas endpoint… account:", IDEAS_ACCOUNT_ID);
         const first = await ideasFetch<AbtIdeasResponse>(
-            `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`,
+            `/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`,
             token
         );
 
-        const pages: number = first._pagination?._pages ?? 1;
-        let items: AbtIdea[] = first._data ?? [];
-
-        for (let page = 2; page <= pages; page++) {
-            const next = await ideasFetch<AbtIdeasResponse>(
-                `/api/v1/accounts/${ACCOUNT_ID}/ideas?_page=${page}&_max_per_page=50`,
-                token
-            );
-            if (Array.isArray(next._data)) {
-                items = items.concat(next._data);
-            }
-        }
-
+        const items: AbtIdea[] = Array.isArray(first.data) ? first.data : [];
+        console.log("[abtasty] getIdeas: received", items.length, "ideas");
         return items;
     } catch (error) {
         const msg = String(error ?? "");
-        // Gestion « bug-friendly » : si l'API idées n'est pas accessible (403 / Forbidden),
-        // on considère simplement qu'il n'y a pas d'idées disponibles pour ce compte
-        // et on laisse le reste de l'app fonctionner normalement.
-        if (msg.includes("403") || msg.toLowerCase().includes("forbidden")) {
-            console.warn(
-                "[abtasty] getIdeas disabled for this account (403 Forbidden). " +
-                    "Backlog d'idées ignoré, les campagnes continuent de se charger normalement."
-            );
-            ideasDisabled = true;
-            return [];
-        }
-        console.error("[abtasty] getIdeas error:", error);
-        throw error;
+        console.error("[abtasty] getIdeas error:", msg);
+        // On ne bloque jamais le chargement du dashboard : on renvoie simplement zéro idée.
+        return [];
     }
 }
 
@@ -458,7 +439,7 @@ export async function getIdeas(token?: string): Promise<AbtIdea[]> {
  */
 export async function getIdea(ideaId: string | number, token?: string): Promise<AbtIdea> {
     return ideasFetch<AbtIdea>(
-        `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`,
+        `/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas/${ideaId}`,
         token
     );
 }
@@ -468,7 +449,7 @@ export async function getIdea(ideaId: string | number, token?: string): Promise<
  */
 export async function createIdea(payload: CreateIdeaPayload, token?: string): Promise<AbtIdea> {
     return ideasPost<AbtIdea>(
-        `/api/v1/accounts/${ACCOUNT_ID}/ideas`,
+        `/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas`,
         payload,
         token
     );
@@ -483,7 +464,7 @@ export async function updateIdea(
     token?: string
 ): Promise<AbtIdea> {
     return ideasPatch<AbtIdea>(
-        `/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`,
+        `/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas/${ideaId}`,
         payload,
         token
     );
@@ -493,5 +474,5 @@ export async function updateIdea(
  * Deletes an idea from AB Tasty.
  */
 export async function deleteIdea(ideaId: string | number, token?: string): Promise<void> {
-    await ideasDelete(`/api/v1/accounts/${ACCOUNT_ID}/ideas/${ideaId}`, token);
+    await ideasDelete(`/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas/${ideaId}`, token);
 }

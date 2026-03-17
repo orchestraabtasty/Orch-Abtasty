@@ -114,11 +114,18 @@ export function applyFilters(tests: Test[], filters: FilterState): Test[] {
                 t.name.toLowerCase().includes(q) ||
                 (t.hypothesis ?? "").toLowerCase().includes(q) ||
                 (t.abt_campaign_id ?? "").toLowerCase().includes(q) ||
+                (t.abt_idea_id ?? "").toLowerCase().includes(q) ||
+                (t.description ?? "").toLowerCase().includes(q) ||
                 t.tags.some((tag) => tag.toLowerCase().includes(q));
             if (!match) return false;
         }
-        if (filters.types.length > 0 && !filters.types.includes(t.type ?? "")) {
-            return false;
+        if (filters.types.length > 0) {
+            const isIdea = t.kind === "idea";
+            const ideaSelected = filters.types.includes("IDEE");
+            const typeMatch = t.type != null && filters.types.includes(t.type);
+            if (!typeMatch && !(isIdea && ideaSelected)) {
+                return false;
+            }
         }
         if (filters.groups.length > 0) {
             const testGroupIds = (t.groups ?? []).map((g) => g.id);
@@ -167,7 +174,11 @@ export function applyFilters(tests: Test[], filters: FilterState): Test[] {
 export function TestFilters({ filters, onChange, tests }: TestFiltersProps) {
     const availableTypes = useMemo(() => {
         const types = new Set(tests.map((t) => t.type).filter(Boolean) as string[]);
-        return Array.from(types).sort();
+        const sorted = Array.from(types).sort();
+        if (tests.some((t) => t.kind === "idea")) {
+            sorted.unshift("IDEE");
+        }
+        return sorted;
     }, [tests]);
 
     const { data: availableGroups = [] } = useGroups();

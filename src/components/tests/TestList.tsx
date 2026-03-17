@@ -11,6 +11,7 @@ import {
 import { TypeBadge } from "./TypeBadge";
 import { getAbtStatusLabel, getTypeBorderLeftClass } from "@/lib/status-mapping";
 import type { Test } from "@/types/test";
+import { Lightbulb } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -50,7 +51,10 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                         tests.map((test) => (
                             <TableRow
                                 key={test.id}
-                                className={cn("cursor-pointer hover:bg-muted/50 transition-colors", getTypeBorderLeftClass(test.type))}
+                                className={cn(
+                                    "cursor-pointer hover:bg-muted/50 transition-colors",
+                                    test.kind === "idea" ? "border-l-4 border-l-amber-500" : getTypeBorderLeftClass(test.type)
+                                )}
                                 onClick={() => onTestClick?.(test)}
                             >
                                 <TableCell className="font-medium">
@@ -66,7 +70,14 @@ export function TestList({ tests, onTestClick }: TestListProps) {
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <TypeBadge type={test.type} />
+                                    {test.kind === "idea" ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border bg-amber-500/15 text-amber-400 border-amber-500/30">
+                                            <Lightbulb className="h-3 w-3" />
+                                            IDÉE
+                                        </span>
+                                    ) : (
+                                        <TypeBadge type={test.type} />
+                                    )}
                                 </TableCell>
                                 <TableCell className="text-sm text-muted-foreground">
                                     {getAbtStatusLabel(test.abt_status)}

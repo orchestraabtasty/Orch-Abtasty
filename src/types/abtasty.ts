@@ -75,37 +75,60 @@ export interface AbtApiError {
 
 // ─── Ideas (Backlog ABT) ──────────────────────────────────────────────────────
 
+export interface AbtIdeaDateField {
+    readable_date?: string;
+    timestamp?: number;
+    pattern?: string;
+}
+
+export interface AbtIdeaUserField {
+    firstname?: string;
+    lastname?: string;
+    email?: string;
+}
+
+export interface AbtIdeaLinkedTest {
+    id: number;
+    name: string;
+    test_type?: string;
+}
+
+export interface AbtIdeaScores {
+    impact?: number;
+    confidence?: number;
+    ease?: number;
+    total?: number;
+    [key: string]: number | undefined;
+}
+
 export interface AbtIdea {
     id: string | number;
-    /** Selon l’endpoint, le libellé peut être `title` (observé) ou `name` (fallback). */
-    title?: string;
-    name?: string;
+    /** Libellé principal de l’idée (champ observé dans la réponse) */
+    title: string;
     description?: string | null;
     hypothesis?: string | null;
+    primary_kpi?: string | null;
     status?: string | null;
+    from_source?: string | null;
     tags?: string[];
-    scores?: Record<string, number> | null;
-    start_date?: { readable_date?: string; timestamp?: number; pattern?: string } | null;
-    created_at?: string | null;
-    updated_at?: string | null;
-    [key: string]: unknown;
+    scores?: AbtIdeaScores | null;
+    start_date?: AbtIdeaDateField | null;
+    end_date?: AbtIdeaDateField | null;
+    created_by?: AbtIdeaUserField | null;
+    created_at?: AbtIdeaDateField | null;
+    updated_by?: AbtIdeaUserField | null;
+    updated_at?: AbtIdeaDateField | null;
+    tests?: AbtIdeaLinkedTest[];
+    owner?: AbtIdeaUserField | null;
 }
 
 export interface AbtIdeasResponse {
-    _data: AbtIdea[];
-    _pagination?: {
-        _page: number;
-        _pages: number;
-        _max_per_page: number;
-        _total: number;
-    };
+    data: AbtIdea[];
 }
 
 export type CreateIdeaPayload = {
-    /** AB Tasty utilise généralement `title` pour les idées. */
-    title?: string;
-    /** Fallback (certaines docs parlent de `name`). */
-    name?: string;
+    /** AB Tasty utilise `title` comme nom d’idée. */
+    title: string;
     description?: string;
     status?: string;
     tags?: string[];

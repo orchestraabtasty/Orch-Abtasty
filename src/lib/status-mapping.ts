@@ -87,6 +87,7 @@ const TYPE_COLOR_MAP: Record<string, string> = {
     redirect: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
     server_side: "bg-teal-500/15 text-teal-400 border-teal-500/30",
     personalization: "bg-pink-500/15 text-pink-400 border-pink-500/30",
+    idee: "bg-amber-500/15 text-amber-400 border-amber-500/30",
 };
 
 const TYPE_BORDER_MAP: Record<string, string> = {
@@ -97,6 +98,7 @@ const TYPE_BORDER_MAP: Record<string, string> = {
     redirect: "border-l-4 border-l-yellow-500",
     server_side: "border-l-4 border-l-teal-500",
     personalization: "border-l-4 border-l-pink-500",
+    idee: "border-l-4 border-l-amber-500",
 };
 
 const TYPE_BADGE_MAP: Record<string, string> = {
@@ -107,6 +109,7 @@ const TYPE_BADGE_MAP: Record<string, string> = {
     redirect: "bg-yellow-500",
     server_side: "bg-teal-500",
     personalization: "bg-pink-500",
+    idee: "bg-amber-500",
 };
 
 /** Returns Tailwind badge color classes for a given test type. */

@@ -89,6 +89,34 @@ export function rowToTest(
 }
 
 /**
+ * Converts an AbtIdeaDateField to an ISO 8601 string.
+ * Uses the timestamp (in seconds or ms) when available for reliable parsing.
+ */
+function ideaDateToIso(
+    field: import("@/types/abtasty").AbtIdeaDateField | null | undefined
+): string | null {
+    if (!field) return null;
+    if (field.timestamp != null) {
+        // ABT timestamps appear to be in seconds; convert to ms if needed
+        const ms = field.timestamp > 1e10 ? field.timestamp : field.timestamp * 1000;
+        const d = new Date(ms);
+        if (!isNaN(d.getTime())) return d.toISOString();
+    }
+    if (field.readable_date) {
+        // readable_date may be "DD/MM/YYYY" — try to parse it
+        const parts = field.readable_date.split("/");
+        if (parts.length === 3) {
+            const [dd, mm, yyyy] = parts;
+            const d = new Date(`${yyyy}-${mm}-${dd}`);
+            if (!isNaN(d.getTime())) return d.toISOString();
+        }
+        const d = new Date(field.readable_date);
+        if (!isNaN(d.getTime())) return d.toISOString();
+    }
+    return null;
+}
+
+/**
  * Maps an AB Tasty idea to a Test object (kind = "idea").
  */
 export function ideaToTest(
@@ -96,17 +124,21 @@ export function ideaToTest(
     groupsMap: Map<string, TestGroup[]> = new Map()
 ): Test {
     const ideaId = `idea-${idea.id}`;
+    const created = ideaDateToIso(idea.created_at);
+    const start = ideaDateToIso(idea.start_date);
+    const end = ideaDateToIso(idea.end_date);
+
     return {
         id: ideaId,
         kind: "idea",
         abt_campaign_id: null,
         abt_idea_id: String(idea.id),
         internal_status: "idea",
-        name: idea.title ?? idea.name ?? "",
+        name: idea.title ?? "",
         type: null,
         abt_status: idea.status ?? null,
-        start_date: null,
-        end_date: null,
+        start_date: start,
+        end_date: end,
         url: null,
         labels: [],
         visitors: 0,
@@ -121,8 +153,8 @@ export function ideaToTest(
         comment: null,
         tags: Array.isArray(idea.tags) ? idea.tags : [],
         assigned_to: [],
-        created_at: idea.created_at ?? new Date().toISOString(),
-        updated_at: idea.updated_at ?? new Date().toISOString(),
+        created_at: created ?? new Date().toISOString(),
+        updated_at: ideaDateToIso(idea.updated_at) ?? created ?? new Date().toISOString(),
         stats: null,
         groups: groupsMap.get(ideaId) ?? [],
     };
