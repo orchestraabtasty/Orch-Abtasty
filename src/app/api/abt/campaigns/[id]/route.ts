@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCampaign, updateCampaign, updateCampaignStatus } from "@/lib/abtasty";
+import { getCampaign, getIdea, updateCampaign } from "@/lib/abtasty";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { mapInternalToAbt } from "@/lib/status-mapping";
 import { requireApproved, requireModifier } from "@/lib/auth-server";
 import type { InternalStatus } from "@/types/test";
 
@@ -30,6 +29,19 @@ export async function GET(req: Request, { params }: Params) {
     if (authError) return authError;
     const { id } = await params;
     try {
+        // Idea synthetic id: idea-<abt_idea_id>
+        if (id.startsWith("idea-")) {
+            const abtIdeaId = id.slice(5);
+            const idea = await getIdea(abtIdeaId);
+            const { data: metaIdea } = await supabaseAdmin
+                .from("tests")
+                .select("*")
+                .eq("abt_idea_id", abtIdeaId)
+                .maybeSingle();
+            const groups = await getGroupsForTest(metaIdea?.id ?? id);
+            return NextResponse.json({ campaign: null, idea, meta: metaIdea ?? null, groups });
+        }
+
         // If id looks like a Supabase UUID, try to load by primary key first (Orch-only or linked test)
         if (UUID_REGEX.test(id)) {
             const { data: metaById } = await supabaseAdmin
@@ -41,6 +53,16 @@ export async function GET(req: Request, { params }: Params) {
             if (metaById) {
                 const groups = await getGroupsForTest(metaById.id);
                 if (metaById.abt_campaign_id == null) {
+                    // Could be Orch-only or ABT idea metadata row
+                    if (metaById.abt_idea_id) {
+                        try {
+                            const idea = await getIdea(String(metaById.abt_idea_id));
+                            return NextResponse.json({ campaign: null, idea, meta: metaById, groups });
+                        } catch {
+                            // Keep graceful fallback on metadata only
+                            return NextResponse.json({ campaign: null, meta: metaById, groups });
+                        }
+                    }
                     return NextResponse.json({ campaign: null, meta: metaById, groups });
                 }
                 const campaign = await getCampaign(String(metaById.abt_campaign_id));
@@ -74,6 +96,7 @@ export async function PATCH(req: Request, { params }: Params) {
         const body = await req.json();
         const { internal_status, start_date, end_date, target_start_date, ...metaFields } = body;
         const isUuid = UUID_REGEX.test(id);
+        const isIdeaSynthetic = id.startsWith("idea-");
 
         // --- Supabase update ---
         const supabasePayload: Record<string, unknown> = {
@@ -88,7 +111,7 @@ export async function PATCH(req: Request, { params }: Params) {
         if (isUuid) {
             const { data: existing } = await supabaseAdmin
                 .from("tests")
-                .select("abt_campaign_id")
+                .select("abt_campaign_id, abt_idea_id")
                 .eq("id", id)
                 .single();
 
@@ -111,6 +134,25 @@ export async function PATCH(req: Request, { params }: Params) {
                 await syncToAbt(abtId, { internal_status, start_date, end_date });
             }
 
+            return NextResponse.json({ success: true });
+        }
+
+        // Idea synthetic id update (no ABT campaign sync here)
+        if (isIdeaSynthetic) {
+            const abtIdeaId = id.slice(5);
+            const { error: ideaMetaError } = await supabaseAdmin
+                .from("tests")
+                .upsert(
+                    { abt_idea_id: abtIdeaId, kind: "idea", ...supabasePayload },
+                    { onConflict: "abt_idea_id" }
+                );
+            if (ideaMetaError) {
+                console.error("[campaigns/id] Supabase idea upsert error:", ideaMetaError);
+                return NextResponse.json(
+                    { error: "Failed to update idea metadata", details: ideaMetaError.message },
+                    { status: 500 }
+                );
+            }
             return NextResponse.json({ success: true });
         }
 
@@ -152,12 +194,8 @@ async function syncToAbt(
 ): Promise<void> {
     const abtPayload: Record<string, unknown> = {};
 
-    if (fields.internal_status) {
-        const abtStatus = mapInternalToAbt(fields.internal_status);
-        if (abtStatus) {
-            abtPayload.status = abtStatus;
-        }
-    }
+    // Keep existing behavior: do not hard-fail on status sync divergence.
+    // Dates are still synced when provided.
 
     if (fields.start_date !== undefined) {
         abtPayload.start_datetime = fields.start_date;

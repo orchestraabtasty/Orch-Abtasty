@@ -90,16 +90,16 @@ async function abtFetch<T>(path: string): Promise<T> {
  * Authorization: Bearer <token> (comme dans Postman).
  */
 function resolveIdeasToken(token?: string): string {
-    const t = token || IDEAS_TOKEN_FALLBACK;
-    if (!t) {
+    const raw = (token || IDEAS_TOKEN_FALLBACK || "").trim();
+    if (!raw) {
         throw new Error("Missing ideas token (ABT_IDEAS_TOKEN). Provide the Bearer token as used in Postman.");
     }
-    return t;
+    // Accepte les valeurs avec préfixe ("Bearer xxx" / "token xxx") ou sans.
+    return raw.replace(/^(bearer|token)\s+/i, "");
 }
 
 async function ideasFetch<T>(path: string, token?: string): Promise<T> {
     const t = resolveIdeasToken(token);
-
     const url = `${BASE_URL}${path}`;
     const res = await fetch(url, {
         headers: {
@@ -109,22 +109,18 @@ async function ideasFetch<T>(path: string, token?: string): Promise<T> {
         },
         cache: "no-store",
     });
-
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`ABT Ideas API error: ${res.status} ${url} — ${text}`);
     }
 
-    const json = await res.json();
-    // Log très détaillé pour debug (compte, URL, taille data)
-    const len = Array.isArray((json as any)?.data) ? (json as any).data.length : -1;
-    console.log("[abtasty] ideasFetch OK:", url, "items:", len);
-    return json;
+    return res.json();
 }
 
 async function ideasPost<T>(path: string, body: object, token?: string): Promise<T> {
     const t = resolveIdeasToken(token);
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const url = `${BASE_URL}${path}`;
+    const res = await fetch(url, {
         method: "POST",
         headers: {
             Authorization: `Bearer ${t}`,
@@ -137,7 +133,7 @@ async function ideasPost<T>(path: string, body: object, token?: string): Promise
 
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`ABT Ideas API POST error: ${res.status} ${path} — ${text}`);
+        throw new Error(`ABT Ideas API POST error: ${res.status} ${url} — ${text}`);
     }
 
     return res.json();
@@ -145,7 +141,8 @@ async function ideasPost<T>(path: string, body: object, token?: string): Promise
 
 async function ideasPatch<T>(path: string, body: object, token?: string): Promise<T> {
     const t = resolveIdeasToken(token);
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const url = `${BASE_URL}${path}`;
+    const res = await fetch(url, {
         method: "PATCH",
         headers: {
             Authorization: `Bearer ${t}`,
@@ -158,7 +155,7 @@ async function ideasPatch<T>(path: string, body: object, token?: string): Promis
 
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`ABT Ideas API PATCH error: ${res.status} ${path} — ${text}`);
+        throw new Error(`ABT Ideas API PATCH error: ${res.status} ${url} — ${text}`);
     }
 
     return res.json();
@@ -166,7 +163,8 @@ async function ideasPatch<T>(path: string, body: object, token?: string): Promis
 
 async function ideasDelete(path: string, token?: string): Promise<void> {
     const t = resolveIdeasToken(token);
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const url = `${BASE_URL}${path}`;
+    const res = await fetch(url, {
         method: "DELETE",
         headers: {
             Authorization: `Bearer ${t}`,
@@ -177,7 +175,7 @@ async function ideasDelete(path: string, token?: string): Promise<void> {
 
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`ABT Ideas API DELETE error: ${res.status} ${path} — ${text}`);
+        throw new Error(`ABT Ideas API DELETE error: ${res.status} ${url} — ${text}`);
     }
 }
 
@@ -416,22 +414,15 @@ export async function updateCampaign(
  * En cas d'erreur (401/403/timeout…), on loggue et on renvoie simplement [].
  */
 export async function getIdeas(token?: string): Promise<AbtIdea[]> {
-    try {
-        console.log("[abtasty] getIdeas: calling ideas endpoint… account:", IDEAS_ACCOUNT_ID);
-        const first = await ideasFetch<AbtIdeasResponse>(
-            `/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`,
-            token
-        );
+    const first = await ideasFetch<AbtIdeasResponse | { _data?: AbtIdea[] } | AbtIdea[]>(
+        `/api/v1/accounts/${IDEAS_ACCOUNT_ID}/ideas?_page=1&_max_per_page=50`,
+        token
+    );
 
-        const items: AbtIdea[] = Array.isArray(first.data) ? first.data : [];
-        console.log("[abtasty] getIdeas: received", items.length, "ideas");
-        return items;
-    } catch (error) {
-        const msg = String(error ?? "");
-        console.error("[abtasty] getIdeas error:", msg);
-        // On ne bloque jamais le chargement du dashboard : on renvoie simplement zéro idée.
-        return [];
-    }
+    if (Array.isArray(first)) return first;
+    if (Array.isArray((first as any)?.data)) return (first as any).data;
+    if (Array.isArray((first as any)?._data)) return (first as any)._data;
+    return [];
 }
 
 /**

@@ -35,6 +35,51 @@ import { getAbtStatusLabel, isTestPeriodLocked } from "@/lib/status-mapping";
 import type { InternalStatus, AbtVariationSummary, AbtGoalSummary, TestGroup } from "@/types/test";
 import { cn } from "@/lib/utils";
 
+type IdeaDateField = {
+    readable_date?: string;
+    timestamp?: number;
+    pattern?: string;
+};
+
+type IdeaUserField = {
+    firstname?: string;
+    lastname?: string;
+    email?: string;
+};
+
+type IdeaLinkedTest = {
+    id: number;
+    name: string;
+    test_type?: string;
+};
+
+type IdeaScores = {
+    impact?: number;
+    confidence?: number;
+    ease?: number;
+    total?: number;
+};
+
+type IdeaApiData = {
+    id: string | number;
+    title?: string;
+    description?: string | null;
+    hypothesis?: string | null;
+    primary_kpi?: string | null;
+    status?: string | null;
+    from_source?: string | null;
+    tags?: string[];
+    scores?: IdeaScores | null;
+    start_date?: IdeaDateField | null;
+    end_date?: IdeaDateField | null;
+    created_by?: IdeaUserField | null;
+    created_at?: IdeaDateField | null;
+    updated_by?: IdeaUserField | null;
+    updated_at?: IdeaDateField | null;
+    tests?: IdeaLinkedTest[];
+    owner?: IdeaUserField | null;
+};
+
 export default function TestDetailPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
@@ -50,6 +95,7 @@ export default function TestDetailPage() {
     const [assignedInput, setAssignedInput] = useState("");
 
     const groups: TestGroup[] = (data as { groups?: TestGroup[] })?.groups ?? [];
+    const ideaData = ((data as { idea?: IdeaApiData | null })?.idea ?? null) as IdeaApiData | null;
     const test = data?.campaign
         ? {
               id: data.meta?.id || String(data.campaign.id),
@@ -77,6 +123,33 @@ export default function TestDetailPage() {
               goals: data.campaign.goals ?? [],
               groups,
           }
+        : data?.idea
+          ? {
+                id: data.meta?.id ?? `idea-${String(data.idea.id)}`,
+                abt_campaign_id: null,
+                name: data.idea.title ?? data.meta?.name ?? "",
+                type: null,
+                abt_status: data.idea.status ?? data.meta?.abt_status ?? null,
+                internal_status: (data.meta?.internal_status || "idea") as InternalStatus,
+                hypothesis: data.meta?.hypothesis ?? data.idea.hypothesis ?? data.idea.description ?? "",
+                comment: data.meta?.comment ?? "",
+                target_start_date: data.meta?.target_start_date ?? "",
+                tags: data.meta?.tags ?? (Array.isArray(data.idea.tags) ? data.idea.tags : []),
+                assigned_to: data.meta?.assigned_to ?? [],
+                start_date: data.meta?.start_date ?? data.idea.start_date?.readable_date ?? null,
+                end_date: data.meta?.end_date ?? data.idea.end_date?.readable_date ?? null,
+                created_at: data.meta?.created_at ?? data.idea.created_at?.readable_date ?? null,
+                url: data.meta?.url ?? null,
+                labels: data.meta?.labels ?? [],
+                visitors: data.meta?.visitors ?? 0,
+                description: data.idea.description ?? null,
+                test_note: null,
+                traffic_value: null,
+                report_token: null,
+                variations: [],
+                goals: [],
+                groups,
+            }
         : data?.meta
           ? {
                 id: data.meta.id,
@@ -190,6 +263,13 @@ export default function TestDetailPage() {
 
     const duration = getDuration();
     const daysSinceLive = getDaysSinceLive();
+    const isIdeaDetail = !test.abt_campaign_id && !!ideaData;
+    const ideaDate = (v?: IdeaDateField | null) => formatDate(v?.readable_date ?? null);
+    const fullName = (u?: IdeaUserField | null) => {
+        if (!u) return "N/A";
+        const n = [u.firstname, u.lastname].filter(Boolean).join(" ").trim();
+        return n || u.email || "N/A";
+    };
 
     return (
         <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -314,7 +394,7 @@ export default function TestDetailPage() {
                     {/* Colonne principale */}
                     <div className="lg:col-span-2 flex flex-col gap-5 min-h-0">
 
-                        {/* ── Résultats ABT (EN PREMIER) ─────────────────────── */}
+                        {/* ── Résultats ABT Campagne ─────────────────────────── */}
                         {test.abt_campaign_id && (
                             <Card className="flex-none border-primary/20 bg-primary/5 shadow-inner">
                                 <CardHeader className="pb-3">
@@ -418,6 +498,87 @@ export default function TestDetailPage() {
                                     <p className="text-[11px] text-muted-foreground italic opacity-60 pt-1">
                                         Conversions, uplift et confiance statistique disponibles dans le rapport ABT complet.
                                     </p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* ── Données ABT Idée ────────────────────────────────── */}
+                        {isIdeaDetail && (
+                            <Card className="flex-none border-amber-500/25 bg-amber-500/5 shadow-inner">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-500 dark:text-amber-400">
+                                        <Lightbulb className="w-4 h-4" />
+                                        Données AB Tasty - Idée
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                        <div className="space-y-0.5 bg-background/40 rounded-lg p-3">
+                                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">ID idée</p>
+                                            <p className="text-sm font-mono font-bold">#{String(ideaData?.id ?? "—")}</p>
+                                        </div>
+                                        <div className="space-y-0.5 bg-background/40 rounded-lg p-3">
+                                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Statut</p>
+                                            <p className="text-sm font-bold">{ideaData?.status ?? "—"}</p>
+                                        </div>
+                                        <div className="space-y-0.5 bg-background/40 rounded-lg p-3">
+                                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Début</p>
+                                            <p className="text-sm font-mono font-bold">{ideaDate(ideaData?.start_date)}</p>
+                                        </div>
+                                        <div className="space-y-0.5 bg-background/40 rounded-lg p-3">
+                                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Fin</p>
+                                            <p className="text-sm font-mono font-bold">{ideaDate(ideaData?.end_date)}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        <Badge variant="outline" className="justify-center h-7">
+                                            Impact: {ideaData?.scores?.impact ?? "—"}
+                                        </Badge>
+                                        <Badge variant="outline" className="justify-center h-7">
+                                            Confidence: {ideaData?.scores?.confidence ?? "—"}
+                                        </Badge>
+                                        <Badge variant="outline" className="justify-center h-7">
+                                            Ease: {ideaData?.scores?.ease ?? "—"}
+                                        </Badge>
+                                        <Badge variant="outline" className="justify-center h-7">
+                                            Total: {ideaData?.scores?.total ?? "—"}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                        <div className="rounded-md bg-background/40 p-3 space-y-1">
+                                            <p className="text-xs uppercase tracking-wider text-muted-foreground">Source / KPI</p>
+                                            <p>Source: <span className="font-medium">{ideaData?.from_source ?? "—"}</span></p>
+                                            <p>KPI principal: <span className="font-medium">{ideaData?.primary_kpi ?? "—"}</span></p>
+                                            <p>Owner: <span className="font-medium">{fullName(ideaData?.owner)}</span></p>
+                                        </div>
+                                        <div className="rounded-md bg-background/40 p-3 space-y-1">
+                                            <p className="text-xs uppercase tracking-wider text-muted-foreground">Traçabilité</p>
+                                            <p>Créée par: <span className="font-medium">{fullName(ideaData?.created_by)}</span></p>
+                                            <p>Créée le: <span className="font-medium">{ideaDate(ideaData?.created_at)}</span></p>
+                                            <p>Mise à jour par: <span className="font-medium">{fullName(ideaData?.updated_by)}</span></p>
+                                            <p>Mise à jour le: <span className="font-medium">{ideaDate(ideaData?.updated_at)}</span></p>
+                                        </div>
+                                    </div>
+
+                                    {Array.isArray(ideaData?.tests) && ideaData.tests.length > 0 && (
+                                        <div className="space-y-1.5">
+                                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                                Tests liés ({ideaData.tests.length})
+                                            </p>
+                                            <div className="space-y-1.5">
+                                                {ideaData.tests.map((linked) => (
+                                                    <div key={linked.id} className="flex items-center justify-between gap-2 bg-background/40 rounded-md px-3 py-2">
+                                                        <span className="text-xs font-medium truncate">{linked.name}</span>
+                                                        <span className="text-xs text-muted-foreground font-mono shrink-0">
+                                                            #{linked.id} {linked.test_type ? `· ${linked.test_type}` : ""}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         )}
