@@ -94,9 +94,16 @@ export async function GET(req: Request) {
         const ideas: Test[] = abtIdeas.map((idea) => {
             const meta = ideaRowsMap.get(String(idea.id));
             const ideaId = meta?.id ?? `idea-${idea.id}`;
+            const base = ideaToTest(idea, groupsMap);
+
             return {
-                ...ideaToTest(idea, groupsMap),
+                ...base,
                 id: ideaId,
+                // Supabase dates override ABT idea dates (timeline drag/resize)
+                start_date: meta?.start_date ?? base.start_date,
+                end_date: meta?.end_date ?? base.end_date,
+                target_start_date: meta?.target_start_date ?? base.target_start_date,
+                internal_status: (meta?.internal_status as Test["internal_status"] | undefined) ?? base.internal_status,
                 hypothesis: meta?.hypothesis ?? idea.description ?? null,
                 comment: meta?.comment ?? null,
                 tags: meta?.tags ?? (Array.isArray(idea.tags) ? idea.tags : []),

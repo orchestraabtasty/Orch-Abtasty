@@ -309,6 +309,18 @@ export default function TestDetailPage() {
                                 </a>
                             </Button>
                         )}
+                        {!test.abt_campaign_id && ideaData?.id && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a
+                                    href={`https://app2.abtasty.com/ideas?ideaId=${String(ideaData.id)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                                    Ouvrir l'idée dans AB Tasty
+                                </a>
+                            </Button>
+                        )}
                         <Button
                             size="sm"
                             disabled={!hasChanges || updateMeta.isPending}

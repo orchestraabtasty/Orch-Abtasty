@@ -140,32 +140,88 @@ export async function PATCH(req: Request, { params }: Params) {
         // Idea synthetic id update (no ABT campaign sync here)
         if (isIdeaSynthetic) {
             const abtIdeaId = id.slice(5);
-            const { error: ideaMetaError } = await supabaseAdmin
+            // Avoid upsert(onConflict: abt_idea_id) because DB may not have a unique constraint.
+            // Update existing metadata row if found, otherwise insert a new row.
+            const { data: existingIdeaMeta, error: findIdeaError } = await supabaseAdmin
                 .from("tests")
-                .upsert(
-                    { abt_idea_id: abtIdeaId, kind: "idea", ...supabasePayload },
-                    { onConflict: "abt_idea_id" }
+                .select("id")
+                .eq("abt_idea_id", abtIdeaId)
+                .maybeSingle();
+
+            if (findIdeaError) {
+                console.error("[campaigns/id] Supabase idea lookup error:", findIdeaError);
+                return NextResponse.json(
+                    { error: "Failed to find idea metadata", details: findIdeaError.message },
+                    { status: 500 }
                 );
+            }
+
+            let ideaMetaError: { message?: string } | null = null;
+            if (existingIdeaMeta?.id) {
+                const { error } = await supabaseAdmin
+                    .from("tests")
+                    .update({ ...supabasePayload, kind: "idea" })
+                    .eq("id", existingIdeaMeta.id);
+                ideaMetaError = error;
+            } else {
+                const { error } = await supabaseAdmin
+                    .from("tests")
+                    .insert({ abt_idea_id: abtIdeaId, kind: "idea", ...supabasePayload });
+                ideaMetaError = error;
+            }
+
             if (ideaMetaError) {
                 console.error("[campaigns/id] Supabase idea upsert error:", ideaMetaError);
                 return NextResponse.json(
-                    { error: "Failed to update idea metadata", details: ideaMetaError.message },
+                    { error: "Failed to update idea metadata", details: ideaMetaError.message ?? "unknown error" },
                     { status: 500 }
                 );
             }
             return NextResponse.json({ success: true });
         }
 
-        // Update by abt_campaign_id (upsert for ABT-linked tests)
-        const { error: supabaseError } = await supabaseAdmin
+        // Update by abt_campaign_id (do not rely on upsert/onConflict constraint)
+        // Some databases may not have a unique constraint on `abt_campaign_id`,
+        // which makes upsert fail and results in "changes not saved".
+        const { data: existingByAbt, error: findError } = await supabaseAdmin
             .from("tests")
-            .upsert(
-                { abt_campaign_id: id, ...supabasePayload },
-                { onConflict: "abt_campaign_id" }
-            );
+            .select("id")
+            .eq("abt_campaign_id", id)
+            .maybeSingle();
 
-        if (supabaseError) {
-            console.error("[campaigns/id] Supabase error:", supabaseError);
+        if (findError) {
+            console.error("[campaigns/id] Supabase lookup error:", findError);
+            return NextResponse.json(
+                { error: "Failed to find test metadata", details: findError.message },
+                { status: 500 }
+            );
+        }
+
+        if (existingByAbt?.id) {
+            const { error: updateError } = await supabaseAdmin
+                .from("tests")
+                .update(supabasePayload)
+                .eq("id", existingByAbt.id);
+
+            if (updateError) {
+                console.error("[campaigns/id] Supabase update error:", updateError);
+                return NextResponse.json(
+                    { error: "Failed to update test metadata", details: updateError.message },
+                    { status: 500 }
+                );
+            }
+        } else {
+            const { error: insertError } = await supabaseAdmin
+                .from("tests")
+                .insert({ abt_campaign_id: id, kind: "campaign", ...supabasePayload });
+
+            if (insertError) {
+                console.error("[campaigns/id] Supabase insert error:", insertError);
+                return NextResponse.json(
+                    { error: "Failed to insert test metadata", details: insertError.message },
+                    { status: 500 }
+                );
+            }
         }
 
         // Sync to ABT
