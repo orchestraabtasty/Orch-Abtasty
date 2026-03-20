@@ -136,7 +136,7 @@ export function TestKanban({ tests, onTestClick }: TestKanbanProps) {
                                         {...provided.droppableProps}
                                         ref={provided.innerRef}
                                         className={cn(
-                                            "flex-1 rounded-xl p-2 bg-muted/30 border border-transparent transition-colors min-h-[500px]",
+                                            "flex-1 rounded-xl p-2 bg-muted/60 border border-transparent transition-colors min-h-[500px] overflow-auto custom-scrollbar",
                                             snapshot.isDraggingOver && "bg-muted/50 border-primary/20"
                                         )}
                                     >

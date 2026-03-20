@@ -61,13 +61,13 @@ export function TestCard({ test, onClick, className }: TestCardProps) {
     return (
         <Card
             className={cn(
-                "group cursor-pointer hover:border-primary/50 hover:shadow-md transition-all duration-200 border-border/50 bg-card/50 backdrop-blur-sm",
+                "group cursor-pointer hover:border-primary/50 hover:shadow-md transition-all duration-200 border-border/50 bg-card/50 backdrop-blur-sm rounded-sm p-0 gap-0 shadow-sm",
                 getTypeBorderLeftClass(test.type),
                 className
             )}
             onClick={onClick}
         >
-            <CardContent className="p-3 space-y-2">
+            <CardContent className="space-y-1.5 p-3">
                 {/* Ligne 1 : type + ID + durée + badge source */}
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
