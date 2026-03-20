@@ -43,7 +43,11 @@ export async function POST(req: Request) {
         if (!title && !name) {
             return NextResponse.json({ error: "title (or name) is required" }, { status: 400 });
         }
-        const idea = await createIdea({ ...body, title: title || undefined, name: name || undefined });
+        // AB Tasty attend `title`. On accepte aussi `name` côté client, mais on le mappe vers `title`
+        // et on s'assure d'envoyer une string (pas `undefined`) pour satisfaire le type.
+        const finalTitle = title || name;
+        const { name: _ignoredName, title: _ignoredTitle, ...rest } = body as Record<string, unknown>;
+        const idea = await createIdea({ ...(rest as CreateIdeaPayload), title: finalTitle });
         return NextResponse.json(idea, { status: 201 });
     } catch (err) {
         console.error("[ideas] POST error:", err);
